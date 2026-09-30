@@ -15,9 +15,12 @@ from project_tool.storage import (
     init_project,
     recover_all,
 )
+from project_tool.storage.migrations import PROJECT_SCHEMA_FIELD
 from project_tool.storage.migrations import migrate as run_migration
+from project_tool.version import SCHEMA_VERSION
 
 CAPABILITIES_FEATURES = {
+    "area": True,
     "artifact": False,
     "git": False,
     "search": False,
@@ -64,7 +67,15 @@ class ProjectServiceGroup:
         return run_doctor(self.ctx)
 
     def project_migrate(self) -> dict[str, Any]:
-        return run_migration(self.ctx.opened)
+        result = run_migration(self.ctx.opened)
+        if result.get("needs_project_bump"):
+            self.ctx.opened.project.schema_version = SCHEMA_VERSION
+            record = self.ctx.save_project(
+                "project.migrated",
+                {"fields": [PROJECT_SCHEMA_FIELD], "from": result["from"], "to": result["to"]},
+            )
+            result["project_schema_version"] = record[PROJECT_SCHEMA_FIELD]
+        return result
 
     # ------------------------------------------------------------------ write
 

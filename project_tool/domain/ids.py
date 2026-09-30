@@ -13,6 +13,7 @@ PREFIX_BY_TYPE: dict[str, str] = {
     "project": "PRJ",
     "goal": "GOL",
     "milestone": "MLS",
+    "area": "ARA",
     "task": "TSK",
     "member": "MBR",
     "update": "UPD",
@@ -28,6 +29,7 @@ TYPE_BY_PREFIX = {prefix: obj_type for obj_type, prefix in PREFIX_BY_TYPE.items(
 COLLECTION_BY_TYPE: dict[str, str] = {
     "goal": "goals",
     "milestone": "milestones",
+    "area": "areas",
     "task": "tasks",
     "member": "members",
     "update": "updates",

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from project_tool.domain.area import Area
 from project_tool.domain.base import BaseObject
 from project_tool.domain.decision import Decision
 from project_tool.domain.errors import InvalidArgument, NotFound, ProjectCorrupted
@@ -25,6 +26,7 @@ from project_tool.domain.update import Update
 MODEL_BY_TYPE: dict[str, type[BaseObject]] = {
     "goal": Goal,
     "milestone": Milestone,
+    "area": Area,
     "task": Task,
     "member": Member,
     "update": Update,
@@ -142,6 +144,20 @@ class ObjectStore:
             if str(record.get("handle", "")).lower() == wanted:
                 return record
         return None
+
+    def find_by_name(self, obj_type: str, name: str) -> dict | None:
+        """按名称大小写不敏感查找（Area 用；名称不唯一，返回 None 交由调用方报错）。"""
+        wanted = str(name or "").strip().casefold()
+        if not wanted:
+            return None
+        found: dict | None = None
+        for record in self.list_raw(obj_type):
+            if str(record.get("name", "")).strip().casefold() != wanted:
+                continue
+            if found is not None:
+                return None
+            found = record
+        return found
 
     def _read_record(self, path: Path) -> dict:
         try:

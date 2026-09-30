@@ -55,6 +55,8 @@ Event 是 Project Tool 的不可变历史。本文件定义 V0.1 的 event 契�
 | `milestone.created` | milestone | `{title}` | |
 | `milestone.updated` | milestone | `{fields*}` | |
 | `milestone.activated` / `milestone.closed` / `milestone.cancelled` | milestone | `{from, to}` | |
+| `area.created` | area | `{name}` | |
+| `area.updated` | area | `{fields*}` | `parent_area_id` 变更时附 `{from, to}` |
 | `task.created` | task | `{title}` | |
 | `task.updated` | task | `{fields*}`；`milestone_id` 变更时附 `{from, to}` | |
 | `task.status_changed` | task | `{from, to}` | inbox/ready/doing/blocked/review/done/cancelled |
@@ -62,6 +64,7 @@ Event 是 Project Tool 的不可变历史。本文件定义 V0.1 的 event 契�
 | `task.dependency_added` | task | `{target_id, relation}` | depends_on/relates_to/duplicates |
 | `task.dependency_removed` | task | `{target_id}` | |
 | `task.label_added` / `task.label_removed` | task | `{label}` | |
+| `project.migrated` | project | `{fields*, from, to}` | schema_version 抬升（1.0→1.1） |
 | `member.added` | member | `{handle}` | |
 | `member.updated` | member | `{fields*}` | |
 | `member.deactivated` / `member.activated` | member | `{}` | |
@@ -78,8 +81,10 @@ Event 是 Project Tool 的不可变历史。本文件定义 V0.1 的 event 契�
 约定：
 
 - `fields` 是发生变化的字段名数组（如 `["title", "labels"]`），不保证顺序有意义。
-- `from` / `to` 是枚举的字符串值。
+- `from` / `to` 是枚举的字符串值（`area.updated` 里是 ID 或 `null`）。
 - 新增事件类型必须在本文件登记；payload 只增不改，保持向后兼容。
+- **纯查询不产生事件**：`artifact.verify` / `area.list` / `task.get` / `*.progress` 一律无事件。
+  只有 mutation 才有事件。
 
 ## 4. 与事务的关系
 

@@ -32,9 +32,10 @@ system.capabilities
 ```json
 {
   "protocol_version": 1,
-  "schema_version": "1.0",
-  "methods": ["goal.archive", "goal.create", "..."],
+  "schema_version": "1.1",
+  "methods": ["area.archive", "goal.archive", "..."],
   "features": {
+    "area": true,
     "artifact": false,
     "git": false,
     "search": false,
@@ -44,6 +45,9 @@ system.capabilities
   }
 }
 ```
+
+`features` 是**能力发现**的唯一来源：客户端据此决定是否展示 Area / Artifact 相关 UI，
+而不是靠猜 method 是否存在。
 
 ## 3. 方法总表（V0.1 状态）
 
@@ -61,8 +65,17 @@ system.capabilities
 | `project.update` | 修改项目（支持 `expected_rev`） | ✓ |
 | `project.status` | 项目状态摘要 | ✓ |
 | `project.doctor` | 完整性检查（repairable 标记） | ✓ |
-| `project.migrate` | schema 升级入口（1.0 暂为 no-op + 校验） | ✓ |
+| `project.migrate` | schema 升级入口（1.0→1.1：补齐集合目录 + 抬升 project schema_version） | ✓ |
 | `project.recover` | 事务 roll-forward + 清理陈旧锁 | ✓ |
+
+### area
+
+```text
+area.create  area.get  area.list  area.update  area.set_parent
+area.archive  area.restore  area.tasks  area.history
+```
+
+全部 V1-A ✓。Area 没有 status / progress；`area.*` 全部接受 `expected_rev`（create 除外）。
 
 ### goal / milestone / task
 
@@ -72,12 +85,12 @@ milestone.create  milestone.get  milestone.list  milestone.update
 milestone.activate  milestone.close  milestone.cancel  milestone.progress
 task.create  task.get  task.list  task.update  task.set_status
 task.assign  task.unassign  task.add_dependency  task.remove_dependency
-task.add_label  task.remove_label  task.move_milestone  task.set_parent
+task.add_label  task.remove_label  task.move_milestone  task.move_area  task.set_parent
 task.archive  task.restore  task.delete
-task.related_updates  task.history
+task.related_updates  task.related_artifacts  task.history
 ```
 
-全部 V0.1 ✓。
+全部 V0.1 ✓（`task.move_area` / `task.related_artifacts` 为 V1-A 新增）。
 
 ### member / update / decision / link
 
@@ -98,8 +111,8 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
 |---|---|---|
 | `log.list` `log.get` `log.entity` `log.member` `log.since` | 事件历史 | ✓ |
 | `graph.project` `graph.tasks` `graph.dependencies` `graph.links` | 项目图 | ✓ |
-| `search.query` | 全文/结构化搜索 | ○（V1） |
-| `artifact.*` | 产物 | ○（V1） |
+| `search.query` | 全文/结构化搜索 | ○（V1-B） |
+| `artifact.*` | 产物引用 | ○（V1-A，见下） |
 | `git.*` | Git 集成 | ○（V1） |
 | `sync.*` | 远程同步 | ○（V2） |
 
@@ -107,13 +120,32 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
 
 - 所有 `*_id` 参数接受**完整 ID 或短 ID**（如 `TSK-01K8H2`）。
 - Member 位置参数同时接受 `handle` 或 `MBR-…`。
-- 修改类方法可选 `expected_rev`（当前：`task.set_status`、`project.update`）；
-  不匹配 → `REVISION_CONFLICT`。
+- **统一并发契约**：所有修改已有 canonical object 的 operation 都接受可选
+  `expected_rev`，语义完全一致，不按领域变化：
+
+  ```text
+  expected_rev 省略 -> 用 load 时的当前 rev 作为事务 base_rev
+  expected_rev 提供 -> 必须等于当前 canonical rev，否则 REVISION_CONFLICT
+  ```
+
+  覆盖：`project.update` / `goal.update` / `goal.set_status` /
+  `milestone.update|activate|close|cancel` / `task.update|set_status|assign|unassign|
+  add_dependency|remove_dependency|add_label|remove_label|move_milestone|move_area|set_parent`
+  / `member.update|activate|deactivate|map_git_identity` / `update.update` /
+  `decision.update|accept|reject|supersede` / `link.update|link.remove` /
+  `area.update|set_parent|archive|restore` / `artifact.update|attach|detach|remove`
+  以及全部 `*.archive` / `*.restore`。
+
+  实现在 `ServiceContext.require_expected_rev()` 一处，不允许各领域复制比较逻辑。
   此外每个事务在提交前重新校验全部 `base_rev`，并发修改不会被静默覆盖。
+- 多对象操作（`decision.supersede`）只接受一个 `expected_rev`，作用于主目标 `old_id`；
+  `new_id` 的 base_rev 在 load 时读取并由事务层强制校验。
 - 列表方法统一支持 `limit`；日志/列表按时间倒序。
 - 时间参数（`since` / `until`）接受 ISO-8601 或相对时间 `7d` / `24h` / `30m`。
-- 引用校验（V0.1）：新引用不得指向 `lifecycle=deleted` 的对象；
+- 引用校验：新引用不得指向 `lifecycle=deleted` 的对象；
   不得把任务分配到 inactive member 或 `closed/cancelled` milestone。
+- Area 位置参数（`--area`、`pjt area …`）同时接受 ID、短 ID、Area 名（大小写不敏感）；
+  名称不唯一时报 `INVALID_ARGUMENT`，不猜测。
 
 示例：
 
@@ -166,10 +198,12 @@ pjt status                      项目状态摘要
 pjt doctor [--repair]           完整性检查；--repair 先执行事务恢复/陈旧锁清理
 pjt migrate                     结构升级
 
-pjt goal add|list|show|edit|achieve|drop
+pjt goal add|list|show|edit|achieve|drop   （edit 支持 --expected-rev）
 pjt milestone add|list|show|edit|activate|close|cancel|progress
-pjt task add|list|show|start|block|review|done|cancel|assign|unassign|depend|undepend
-          |label|unlabel|move|archive|restore|delete|history
+pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
+          |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
+          |archive|restore|delete|history
+pjt area add|list|show|tree|edit|archive|restore
 pjt member add|list|show|edit|deactivate|activate|workload|activity|use
 pjt update add|list|show
 pjt decision add|list|show|accept|reject|supersede
@@ -177,6 +211,9 @@ pjt link add|list|show|remove|resolve
 pjt log [--task --member --since --type]
 pjt graph [tasks|milestone <id>|projects]
 ```
+
+编辑类命令统一支持 `--expected-rev REV`（`goal/milestone/task/member/decision/link/area/artifact edit`），
+不匹配时 exit 5 / `REVISION_CONFLICT`。
 
 说明：`member use` 只写本机 `.pjt/local/local.toml` 的默认 Actor，不产生项目事件；
 `update add` 省略文本时读取 stdin 或 `$EDITOR`。

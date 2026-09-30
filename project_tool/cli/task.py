@@ -12,6 +12,7 @@ from project_tool.cli.render import (
     render_events,
     render_task_show,
     render_task_table,
+    render_update_list,
 )
 
 task_app = typer.Typer(help="Task management", no_args_is_help=True)
@@ -26,6 +27,7 @@ def task_add(
         list[str] | None, typer.Option("--owner", "-o", help="Owner member (repeatable)")
     ] = None,
     milestone: Annotated[str | None, typer.Option("--milestone", "-m")] = None,
+    area: Annotated[str | None, typer.Option("--area", "-a", help="Area (id or name)")] = None,
     parent: Annotated[str | None, typer.Option("--parent")] = None,
     priority: Annotated[str, typer.Option("--priority", "-p", help="critical|high|normal|low")] = "normal",
     weight: Annotated[int, typer.Option("--weight", "-w")] = 1,
@@ -45,6 +47,7 @@ def task_add(
             "description": description,
             "owner_ids": owner,
             "milestone_id": milestone,
+            "area_id": area,
             "parent_task_id": parent,
             "priority": priority,
             "weight": weight,
@@ -66,6 +69,7 @@ def task_list(
     owner: Annotated[str | None, typer.Option("--owner", "-o")] = None,
     label: Annotated[str | None, typer.Option("--label", "-l")] = None,
     milestone: Annotated[str | None, typer.Option("--milestone", "-m")] = None,
+    area: Annotated[str | None, typer.Option("--area", "-a", help="Filter by area (id or name)")] = None,
     priority: Annotated[list[str] | None, typer.Option("--priority", "-p")] = None,
     parent: Annotated[str | None, typer.Option("--parent")] = None,
     include_archived: Annotated[bool, typer.Option("--all", help="Include archived tasks")] = False,
@@ -79,6 +83,7 @@ def task_list(
             "owner": owner,
             "label": label,
             "milestone": milestone,
+            "area": area,
             "priority": priority,
             "parent": parent,
             "include_archived": include_archived,
@@ -102,6 +107,7 @@ def task_edit(
     ] = None,
     due: Annotated[str | None, typer.Option("--due", help="Due datetime (ISO-8601)")] = None,
     milestone: Annotated[str | None, typer.Option("--milestone", "-m", help="Move milestone")] = None,
+    area: Annotated[str | None, typer.Option("--area", "-a", help="Move area (id or name)")] = None,
     parent: Annotated[str | None, typer.Option("--parent", help="Set parent task")] = None,
     expected_rev: ExpectedRev = None,
 ) -> None:
@@ -120,6 +126,8 @@ def task_edit(
         params["due_at"] = due
     if milestone is not None:
         params["milestone_id"] = milestone
+    if area is not None:
+        params["area_id"] = area
     if parent is not None:
         params["parent_task_id"] = parent
     execute(ctx, "task.update", params, render=lambda r: console.print(f"{r['id']} updated"))
@@ -317,6 +325,38 @@ def task_move(
         "task.move_milestone",
         {"task_id": task_id, "milestone_id": milestone_id},
         render=lambda result: console.print(f"{result['id']} milestone: {sid(result.get('milestone_id'))}"),
+    )
+
+
+@task_app.command("move-area")
+def task_move_area(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    area: Annotated[
+        str | None, typer.Argument(help="Target area (id or name); omit to detach")
+    ] = None,
+    expected_rev: ExpectedRev = None,
+) -> None:
+    """Move a task to an area (or detach)."""
+    execute(
+        ctx,
+        "task.move_area",
+        {"task_id": task_id, "area_id": area, "expected_rev": expected_rev},
+        render=lambda result: console.print(f"{result['id']} area: {sid(result.get('area_id'))}"),
+    )
+
+
+@task_app.command("related-updates")
+def task_related_updates(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Show progress updates recorded for a task."""
+    execute(
+        ctx,
+        "task.related_updates",
+        {"task_id": task_id},
+        render=lambda r: (render_update_list(r) if r else console.print("[dim]no updates[/dim]")),
     )
 
 

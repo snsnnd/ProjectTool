@@ -40,6 +40,7 @@ class TaskService:
         priority="normal",
         weight=1,
         milestone_id=None,
+        area_id=None,
         parent_task_id=None,
         owner_ids=None,
         labels=None,
@@ -59,6 +60,7 @@ class TaskService:
             priority=enum_value(Priority, priority, "priority"),
             weight=weight_value,
             milestone_id=self.ctx.assert_milestone_open(milestone_id),
+            area_id=self.ctx.area_id(area_id),
             parent_task_id=self.ctx.ref_or_none("task", parent_task_id),
             owner_ids=self.ctx.owner_ids(owner_ids),
             labels=[require_label(item) for item in normalize_labels(labels)],
@@ -80,6 +82,7 @@ class TaskService:
         owner=None,
         label=None,
         milestone=None,
+        area=None,
         priority=None,
         parent=None,
         include_archived=False,
@@ -89,6 +92,7 @@ class TaskService:
         wanted_priority = {enum_value(Priority, item, "priority").value for item in as_list(priority)}
         owner_id = self.ctx.member_id(owner) if owner else None
         milestone_id = self.ctx.ref_or_none("milestone", milestone, allow_deleted=True) if milestone else None
+        area_id = self.ctx.area_id(area) if area else None
         parent_id = self.ctx.ref_or_none("task", parent, allow_deleted=True) if parent else None
         tasks = self.ctx.tasks_by_id(include_deleted=include_deleted)
         result = []
@@ -104,6 +108,8 @@ class TaskService:
             if owner_id and owner_id not in task.owner_ids:
                 continue
             if milestone_id and task.milestone_id != milestone_id:
+                continue
+            if area_id and task.area_id != area_id:
                 continue
             if parent_id and task.parent_task_id != parent_id:
                 continue
@@ -133,6 +139,7 @@ class TaskService:
         priority=None,
         weight=None,
         milestone_id=UNSET,
+        area_id=UNSET,
         parent_task_id=UNSET,
         owner_ids=None,
         labels=None,
@@ -160,6 +167,9 @@ class TaskService:
                 milestone_id, current=task.milestone_id
             )
             fields.append("milestone_id")
+        if area_id is not UNSET:
+            task.area_id = self.ctx.area_id(area_id)
+            fields.append("area_id")
         if parent_task_id is not UNSET:
             new_parent = self.ctx.ref_or_none("task", parent_task_id)
             if new_parent == task.id:
@@ -308,6 +318,22 @@ class TaskService:
             base,
             "task.updated",
             {"fields": ["milestone_id"], "from": old_value, "to": new_value},
+        )
+        return self.ctx.task_view(task)
+
+    def task_move_area(self, task_id, area_id=None, expected_rev=None) -> dict[str, Any]:
+        task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
+        old_value = task.area_id
+        new_value = self.ctx.area_id(area_id)
+        if old_value == new_value:
+            return self.ctx.task_view(task)
+        task.area_id = new_value
+        self.ctx.save(
+            task,
+            base,
+            "task.updated",
+            {"fields": ["area_id"], "from": old_value, "to": new_value},
         )
         return self.ctx.task_view(task)
 

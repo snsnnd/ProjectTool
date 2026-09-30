@@ -210,6 +210,8 @@ def render_task_show(task: dict[str, Any]) -> None:
     )
     if task.get("milestone_id"):
         console.print(f"  milestone  {sid(task['milestone_id'])}")
+    if task.get("area_id"):
+        console.print(f"  area       {sid(task['area_id'])}")
     if task.get("parent_task_id"):
         console.print(f"  parent     {sid(task['parent_task_id'])}")
     if task.get("owner_ids"):
@@ -238,6 +240,86 @@ def render_task_show(task: dict[str, Any]) -> None:
             f"{', '.join(sid(item) for item in task['blocked_by'])}"
         )
     console.print(f"\n  [dim]rev {task.get('rev', '')}  v{task.get('version', 1)}[/dim]")
+
+
+def render_area_list(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        console.print("[dim]no areas[/dim]")
+        return
+    for row in rows:
+        console.print(
+            f"{sid(row['id'])}  {row['name']:<16} "
+            f"[dim]{row['task_count']} task(s)"
+            f"{'  parent ' + sid(row['parent_area_id']) if row.get('parent_area_id') else ''}[/dim]"
+        )
+
+
+def render_area_show(result: dict[str, Any]) -> None:
+    console.print(f"[bold]{result['id']}[/bold]  {result['name']}  [dim]({result['lifecycle']})[/dim]")
+    if result.get("parent_area_id"):
+        console.print(f"  parent    {sid(result['parent_area_id'])}")
+    console.print(f"  tasks     {result['task_count']}")
+    if result.get("description"):
+        console.print(f"\n  {result['description']}")
+    if result.get("task_count"):
+        console.print(f"\n  [dim]list tasks with: pjt task list --area {result['name']}[/dim]")
+    console.print(f"\n  [dim]rev {result.get('rev', '')}  v{result.get('version', 1)}[/dim]")
+
+
+def render_artifact_list(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        console.print("[dim]no artifacts[/dim]")
+        return
+    for row in rows:
+        linked: list[str] = []
+        for label, key in (
+            ("task", "related_task_ids"),
+            ("dec", "related_decision_ids"),
+            ("mls", "related_milestone_ids"),
+            ("gol", "related_goal_ids"),
+        ):
+            linked.extend(f"{label}:{sid(item)}" for item in row.get(key) or [])
+        console.print(
+            f"{sid(row['id'])}  {row['kind']:<12} {row['locator']}"
+            + (f"  [dim]{' '.join(linked)}[/dim]" if linked else "")
+        )
+
+
+def render_artifact_show(result: dict[str, Any]) -> None:
+    console.print(f"[bold]{result['id']}[/bold]  {result['name']}  [dim]({result['lifecycle']})[/dim]")
+    console.print(f"  kind      {result['kind']}")
+    console.print(f"  locator   {result['locator']}")
+    if result.get("description"):
+        console.print(f"\n  {result['description']}")
+    groups = (
+        ("Tasks", "related_task_ids"),
+        ("Decisions", "related_decision_ids"),
+        ("Milestones", "related_milestone_ids"),
+        ("Goals", "related_goal_ids"),
+    )
+    for title, key in groups:
+        items = result.get(key) or []
+        if items:
+            console.print(f"\n  [bold]{title}[/bold]")
+            for item in items:
+                console.print(f"    {sid(item)}")
+    if result.get("metadata"):
+        console.print(f"\n  [bold]metadata[/bold]  {result['metadata']}")
+    console.print(f"\n  [dim]rev {result.get('rev', '')}  v{result.get('version', 1)}[/dim]")
+
+
+def render_artifact_verify(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        console.print("[dim]no artifacts[/dim]")
+        return
+    markers = {"ok": "green PASS", "missing": "yellow MISSING", "rejected": "red REJECTED",
+               "skipped": "dim SKIP"}
+    for row in rows:
+        marker = markers.get(row.get("status", ""), str(row.get("status", "?")))
+        detail = row.get("detail") or ""
+        console.print(f"  [{marker}] {sid(row['id'])}  {row['kind']:<12} {row['locator']}")
+        if detail:
+            console.print(f"           [dim]{detail}[/dim]")
 
 
 def render_member_workload(result: dict[str, Any]) -> None:
@@ -274,6 +356,35 @@ def render_project_graph(tree_data: dict[str, Any]) -> None:
         root.add(
             f"Milestone: {milestone['title']} [dim]{milestone['progress'] * 100:.0f}%[/dim]"
         )
+    areas = tree_data.get("areas") or []
+    if areas:
+        # Area 是与 Goal/Milestone 平级的独立分区：这里单独一节，不造假的 Goal->Area->Milestone。
+        section = root.add("[bold]Areas[/bold] [dim](stable partitions)[/dim]")
+        children: dict[str, list[dict[str, Any]]] = {}
+        for area in areas:
+            children.setdefault(area.get("parent_area_id") or "", []).append(area)
+        known = {area["id"] for area in areas}
+
+        def add_area(parent: Tree, area: dict[str, Any], seen: set[str]) -> None:
+            label = f"{short_id(area['id'])}  {area['name']} [dim]{area['task_count']} task(s)[/dim]"
+            if area["id"] in seen:
+                parent.add(label + " [red](cycle)[/red]")
+                return
+            branch = parent.add(label)
+            for child in sorted(children.get(area["id"], []), key=lambda i: i["name"].casefold()):
+                add_area(branch, child, seen | {area["id"]})
+
+        for area in sorted(children.get("", []), key=lambda i: i["name"].casefold()):
+            add_area(section, area, set())
+        orphans = [
+            area
+            for parent_id, items in children.items()
+            if parent_id
+            for area in items
+            if parent_id not in known
+        ]
+        for area in sorted(orphans, key=lambda i: i["name"].casefold()):
+            add_area(section, area, set())
     for link in tree_data.get("links") or []:
         root.add(f"Link: {link['name']} -> {link['kind']} [dim]({link['mode']})[/dim]")
     console.print(root)

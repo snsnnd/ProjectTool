@@ -12,7 +12,7 @@ from typing import Any
 from project_tool.domain.enums import Lifecycle
 from project_tool.domain.errors import ProjectToolError
 from project_tool.domain.hashing import verify_rev
-from project_tool.domain.ids import PREFIX_BY_TYPE
+from project_tool.domain.ids import COLLECTION_BY_TYPE, PREFIX_BY_TYPE
 from project_tool.graph.dependency import detect_cycles
 from project_tool.storage.local_state import lock_is_stale, process_alive, read_lock
 from project_tool.storage.object_store import MODEL_BY_TYPE
@@ -112,6 +112,24 @@ def run_doctor(ctx) -> dict[str, Any]:
         else:
             add(f"objects.{obj_type}", "ok", f"{len(records)} {obj_type} object(s)")
 
+    # ------------------------------------------------------------- object layout
+    # 旧项目（V0.1）没有 areas/ 等新集合目录：不是损坏，只是还没迁移。
+    missing_collections = sorted(
+        collection
+        for collection in COLLECTION_BY_TYPE.values()
+        if not (ctx.paths.objects / collection).is_dir()
+    )
+    if missing_collections:
+        add(
+            "objects.layout",
+            "warning",
+            f"missing object collection dir(s): {', '.join(missing_collections)}; "
+            "run 'pjt migrate' (empty collections read as [] in the meantime)",
+            missing_collections,
+        )
+    else:
+        add("objects.layout", "ok", "all object collection dirs present")
+
     # ------------------------------------------------------------- references
     ref_errors: list[str] = []
     ref_warnings: list[str] = []
@@ -130,11 +148,18 @@ def run_doctor(ctx) -> dict[str, Any]:
         if record.get("lifecycle") == Lifecycle.DELETED.value:
             continue
         check_ref("milestone", record.get("milestone_id"), source)
+        check_ref("area", record.get("area_id"), source)
         check_ref("task", record.get("parent_task_id"), source)
         for owner in record.get("owner_ids", []) or []:
             check_ref("member", owner, source)
         for dep in record.get("dependencies", []) or []:
             check_ref("task", dep.get("task_id"), source)
+
+    for record in records_by_type.get("area", []):
+        source = str(record.get("id", "?"))
+        if record.get("lifecycle") == Lifecycle.DELETED.value:
+            continue
+        check_ref("area", record.get("parent_area_id"), source)
 
     for record in records_by_type.get("milestone", []):
         source = str(record.get("id", "?"))
@@ -189,7 +214,7 @@ def run_doctor(ctx) -> dict[str, Any]:
         if hierarchy_cycles:
             add("hierarchy", "error", f"{len(hierarchy_cycles)} hierarchy cycle(s)", hierarchy_cycles)
         else:
-            add("hierarchy", "ok", "goal/task/decision hierarchies acyclic")
+            add("hierarchy", "ok", "goal/area/task/decision hierarchies acyclic")
 
     # ------------------------------------------------------------- members
     handles: dict[str, str] = {}
@@ -358,7 +383,11 @@ def run_doctor(ctx) -> dict[str, Any]:
 def _hierarchy_cycles(ctx, records_by_type: dict[str, list[dict[str, Any]]]) -> list[str]:
     found: list[str] = []
 
-    for obj_type, field in (("goal", "parent_goal_id"), ("task", "parent_task_id")):
+    for obj_type, field in (
+        ("goal", "parent_goal_id"),
+        ("area", "parent_area_id"),
+        ("task", "parent_task_id"),
+    ):
         parents = {
             str(record.get("id")): record.get(field)
             for record in records_by_type.get(obj_type, [])

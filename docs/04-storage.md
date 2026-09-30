@@ -14,7 +14,8 @@
 │   ├── members/     MBR-….json
 │   ├── updates/     UPD-….json
 │   ├── decisions/   DEC-….json
-│   ├── artifacts/   ART-….json      （V1）
+│   ├── areas/        ARA-….json
+│   ├── artifacts/   ART-….json
 │   └── links/       LNK-….json
 │
 ├── events/                 # canonical：不可变事件，按年月分目录

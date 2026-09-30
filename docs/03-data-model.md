@@ -12,7 +12,8 @@ TSK-01K8H2MBQX   Task
 MBR-01K8H61N2B   Member
 UPD-01K8H82F4T   Update
 DEC-01K8H51CJ7   Decision
-ART-01K8H71R9M   Artifact（V1）
+ARA-01K8H6ZA0T   Area（V1-A）
+ART-01K8H71R9M   Artifact（V1-A）
 LNK-01K8H91ZXA   Project Link
 EVT-01K8HB39NE   Event
 TXN-01K8HB38ZF   Transaction
@@ -78,12 +79,13 @@ canonical_json = json.dumps(..., sort_keys=True, separators=(",",":"), ensure_as
 | Project | `project.json` | `planned active paused completed archived` | ✓ |
 | Goal | `objects/goals/` | `proposed active achieved dropped` | ✓ |
 | Milestone | `objects/milestones/` | `planned active closed cancelled` | ✓ |
+| Area | `objects/areas/` | 无 status（`lifecycle` only） | ✓ |
 | Task | `objects/tasks/` | `inbox ready doing blocked review done cancelled` | ✓ |
 | Member | `objects/members/` | 布尔 `active` | ✓ |
 | Update | `objects/updates/` | 无状态（可 archive） | ✓ |
 | Decision | `objects/decisions/` | `draft accepted rejected superseded` | ✓ |
 | Link | `objects/links/` | 布尔 `enabled` | ✓ |
-| Artifact | `objects/artifacts/` | 无状态 | V1 |
+| Artifact | `objects/artifacts/` | 无状态 | ✓ |
 
 Priority（统一四级）：`critical > high > normal > low`，默认 `normal`。
 
@@ -164,6 +166,7 @@ Task 状态语义：
   "priority": "high",
   "weight": 2,
   "milestone_id": "MLS-01K8H44X30",
+  "area_id": "ARA-01K8H6ZA0T",
   "parent_task_id": null,
   "owner_ids": ["MBR-01K8H61N2B"],
   "labels": ["debug", "network"],
@@ -179,6 +182,8 @@ Task 状态语义：
 
 - `weight` ≥ 1，默认 1，用于进度加权。
 - 状态离开 `doing` 不清空 `started_at`；进入 `done` 时写 `completed_at`（再次离开 `done` 时清空）。
+- `area_id` 单值（V1-A 不支持一个 Task 多个 Area）；旧数据没有该字段时读作 `null`。
+  Task 不保存 `milestone_ids` / `area_ids` 数组，Milestone / Area 反向查询时遍历 Task。
 
 ### 4.5 Member（只是项目内身份，不是账号）
 
@@ -231,7 +236,31 @@ Task 状态语义：
 
 supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.supersedes_id → B。
 
-### 4.8 Artifact（V1，schema 先冻结）
+### 4.7b Area（稳定的项目分区 / 工作领域）
+
+```json
+{
+  "id": "ARA-01K8H6ZA0T", "type": "area",
+  "name": "Debug",
+  "description": "真机调试与传输层",
+  "parent_area_id": null
+}
+```
+
+- Area 回答「这个工作属于哪里？」（模块 / 子系统），Milestone 回答「这个工作服务于哪个阶段？」。
+- **没有** `status` / `progress` / `due_at` / `owner`：给它加进度就退化成第二个 Milestone。
+  读视图 `area.get` / `area.list` / `graph.project` 也**不返回 progress**。
+- `parent_area_id` 支持简单父子层级（`UI ├── Editor └── Debug UI`）；
+  环检测与 goal/task parent 复用同一套 `_validate_chain`。
+- 名称**不强制唯一**（与 goal/milestone/task 的 title 一致）；按名称引用时不唯一则报
+  `INVALID_ARGUMENT`（要求用 ID/短 ID 消歧），而不是猜一个。
+- Area ≠ Label：Label 是自由标签（`bug` / `test` / `high-risk`），没有结构；
+  Area 是有类型（`ARA-`）、有层级、可被引用的稳定分区。
+  `refs/labels.json` 仍然只聚合 Task.labels，不含 Area。
+- Area **不进入** `pjt status`（避免信息过载），只在 `task show` / `task list --area` /
+  `graph project` 中出现。
+
+### 4.8 Artifact（V1-A：reference 语义，无内容存储）
 
 ```json
 {
@@ -293,6 +322,7 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
 project.initialized / project.updated
 goal.created / goal.updated / goal.status_changed
 milestone.created / milestone.updated / milestone.activated / milestone.closed / milestone.cancelled
+area.created / area.updated
 task.created / task.updated / task.status_changed / task.assigned / task.unassigned
 task.dependency_added / task.dependency_removed / task.label_added / task.label_removed
 member.added / member.updated / member.deactivated / member.activated
@@ -341,11 +371,14 @@ computed blocked 列表
 ```text
 Goal        parent_goal_id → Goal
 Milestone   goal_ids → Goal[]
-Task        milestone_id → Milestone         parent_task_id → Task
+Area        parent_area_id → Area
+Task        milestone_id → Milestone         area_id → Area
+            parent_task_id → Task
             owner_ids → Member[]             dependencies → Task[]
 Update      task_ids → Task[]                milestone_id → Milestone
 Decision    related_task_ids → Task[]        supersedes_id → Decision
-Artifact    task_ids → Task[]                (V1)
+Artifact    related_task_ids → Task[]        related_decision_ids → Decision[]
+            related_milestone_ids → Milestone[]   related_goal_ids → Goal[]
 Link        target.project_id → Project（另一项目）
 Event       entity_id → 任意对象
 ```
@@ -367,7 +400,12 @@ Event       entity_id → 任意对象
 | 重复 dependency / 重复 assign | 幂等 no-op，不产生事件 | — |
 | self dependency / self parent | 拒绝 | `INVALID_ARGUMENT` |
 | task dependency 环（depends_on） | 拒绝 | `DEPENDENCY_CYCLE` |
-| goal parent 环 / task parent 环 | 拒绝 | `HIERARCHY_CYCLE` |
+| goal parent 环 / area parent 环 / task parent 环 | 拒绝 | `HIERARCHY_CYCLE` |
+| area self parent | 拒绝 | `INVALID_ARGUMENT` |
+| Task 引用 deleted area | 拒绝 | `INVALID_ARGUMENT` |
+| artifact.file locator 绝对路径 / `..` / `.pjt/**` | 拒绝 | `INVALID_ARGUMENT` |
+| artifact.url 非 http(s) / 缺 netloc | 拒绝 | `INVALID_ARGUMENT` |
+| `expected_rev` 与当前 rev 不符 | 拒绝（省略则用当前 rev 作 base_rev） | `REVISION_CONFLICT` |
 | decision supersede 环 / 自我取代 | 拒绝 | `HIERARCHY_CYCLE` / `INVALID_ARGUMENT` |
 | 新引用 deleted 对象 | 拒绝 | `INVALID_ARGUMENT` |
 | assign inactive / deleted member | 拒绝 | `INVALID_ARGUMENT` |

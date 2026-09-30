@@ -18,6 +18,7 @@ from typing import Any
 
 from project_tool.application.context import ServiceContext, resolve_actor
 from project_tool.application.registry import MethodSpec, build_registry
+from project_tool.application.services.area import AreaService
 from project_tool.application.services.decision import DecisionService
 from project_tool.application.services.goal import GoalService
 from project_tool.application.services.graph import GraphService
@@ -49,6 +50,7 @@ class ProjectService:
         self.goals = GoalService(self.ctx)
         self.milestones = MilestoneService(self.ctx)
         self.tasks = TaskService(self.ctx)
+        self.areas = AreaService(self.ctx, self.tasks)
         self.members = MemberService(self.ctx)
         self.updates = UpdateService(self.ctx)
         self.decisions = DecisionService(self.ctx)

@@ -90,7 +90,10 @@ def test_cli_doctor_repair_cleans_staging(tmp_path):
 
 
 def test_cli_all_help_pages_build(tmp_path):
-    groups = [None, "task", "goal", "milestone", "member", "update", "decision", "link", "log", "graph"]
+    groups = [
+        None, "task", "area", "goal", "milestone", "member",
+        "update", "decision", "link", "log", "graph",
+    ]
     for group in groups:
         args = [group, "--help"] if group else ["--help"]
         result = invoke(args)

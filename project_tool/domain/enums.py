@@ -96,6 +96,7 @@ class ObjectType(StrEnum):
     PROJECT = "project"
     GOAL = "goal"
     MILESTONE = "milestone"
+    AREA = "area"
     TASK = "task"
     MEMBER = "member"
     UPDATE = "update"

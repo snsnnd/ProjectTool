@@ -26,6 +26,7 @@ def build_registry(service) -> dict[str, MethodSpec]:
     project = service.project
     goals = service.goals
     milestones = service.milestones
+    areas = service.areas
     tasks = service.tasks
     members = service.members
     updates = service.updates
@@ -72,6 +73,16 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec(
             "milestone.progress", milestones.milestone_progress, False, "milestone", "derived progress"
         ),
+        # area
+        MethodSpec("area.create", areas.area_create, True, "area", "create area"),
+        MethodSpec("area.get", areas.area_get, False, "area", "read area"),
+        MethodSpec("area.list", areas.area_list, False, "area", "list areas"),
+        MethodSpec("area.update", areas.area_update, True, "area", "update area"),
+        MethodSpec("area.set_parent", areas.area_set_parent, True, "area", "set parent area"),
+        MethodSpec("area.archive", areas.area_archive, True, "area", "archive area"),
+        MethodSpec("area.restore", areas.area_restore, True, "area", "restore area"),
+        MethodSpec("area.tasks", areas.area_tasks, False, "area", "tasks in an area"),
+        MethodSpec("area.history", areas.area_history, False, "area", "area event history"),
         # task
         MethodSpec("task.create", tasks.task_create, True, "task", "create task"),
         MethodSpec("task.get", tasks.task_get, False, "task", "read task"),
@@ -85,6 +96,7 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec("task.add_label", tasks.task_add_label, True, "task", "add label"),
         MethodSpec("task.remove_label", tasks.task_remove_label, True, "task", "remove label"),
         MethodSpec("task.move_milestone", tasks.task_move_milestone, True, "task", "move task to milestone"),
+        MethodSpec("task.move_area", tasks.task_move_area, True, "task", "move task to area"),
         MethodSpec("task.set_parent", tasks.task_set_parent, True, "task", "set parent task"),
         MethodSpec("task.archive", tasks.task_archive, True, "task", "archive task"),
         MethodSpec("task.restore", tasks.task_restore, True, "task", "restore task"),

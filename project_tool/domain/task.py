@@ -29,6 +29,7 @@ class Task(BaseObject):
     weight: int = Field(default=1, ge=1)
 
     milestone_id: str | None = None
+    area_id: str | None = None
     parent_task_id: str | None = None
 
     owner_ids: list[str] = Field(default_factory=list)

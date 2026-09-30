@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from project_tool.application.context import ServiceContext
+from project_tool.domain.area import Area
 from project_tool.domain.goal import Goal
 from project_tool.domain.link import Link
 from project_tool.domain.milestone import Milestone
@@ -23,6 +24,7 @@ class GraphService:
             cast(list[Milestone], self.ctx.store.list_models("milestone")),
             self.ctx.tasks_by_id(),
             cast(list[Link], self.ctx.store.list_models("link")),
+            cast(list[Area], self.ctx.store.list_models("area")),
         )
 
     def graph_tasks(self, milestone_id=None, include_archived=False) -> dict[str, Any]:

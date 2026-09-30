@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from project_tool.domain.area import Area
 from project_tool.domain.enums import DependencyRelation, Lifecycle, TaskStatus
 from project_tool.domain.goal import Goal
 from project_tool.domain.link import Link
@@ -23,6 +24,7 @@ def task_summary(task: Task, tasks: dict[str, Task]) -> dict[str, Any]:
         "priority": task.priority.value,
         "weight": task.weight,
         "milestone_id": task.milestone_id,
+        "area_id": task.area_id,
         "parent_task_id": task.parent_task_id,
         "owner_ids": list(task.owner_ids),
         "labels": list(task.labels),
@@ -131,16 +133,41 @@ def milestone_summary(milestone: Milestone, tasks: dict[str, Task]) -> dict[str,
     }
 
 
+def area_summary(area: Area, tasks: dict[str, Task]) -> dict[str, Any]:
+    """Area 读视图：只有结构信息，**没有** progress / status。
+
+    刻意与 milestone_summary 区分开——Area 不是里程碑，不参与阶段进度推导。
+    """
+    task_ids = sorted(
+        task.id
+        for task in tasks.values()
+        if task.area_id == area.id and task.lifecycle == Lifecycle.ACTIVE
+    )
+    return {
+        "id": area.id,
+        "name": area.name,
+        "description": area.description,
+        "parent_area_id": area.parent_area_id,
+        "task_ids": task_ids,
+        "task_count": len(task_ids),
+        "version": area.version,
+        "rev": area.rev,
+        "lifecycle": area.lifecycle.value,
+    }
+
+
 def build_project_tree(
     project: Project,
     goals: list[Goal],
     milestones: list[Milestone],
     tasks: dict[str, Task],
     links: list[Link],
+    areas: list[Area] | None = None,
 ) -> dict[str, Any]:
     active_goals = [g for g in goals if g.lifecycle == Lifecycle.ACTIVE]
     active_milestones = [m for m in milestones if m.lifecycle == Lifecycle.ACTIVE]
     active_links = [link for link in links if link.lifecycle == Lifecycle.ACTIVE and link.enabled]
+    active_areas = [a for a in (areas or []) if a.lifecycle == Lifecycle.ACTIVE]
 
     milestones_by_goal: dict[str, list[str]] = {}
     for milestone in active_milestones:
@@ -159,6 +186,8 @@ def build_project_tree(
             for goal in active_goals
         ],
         "milestones": [milestone_summary(m, tasks) for m in active_milestones],
+        # Area 是与 Goal/Milestone 平级的独立分区，不塞进 Goal -> Milestone 层级。
+        "areas": [area_summary(area, tasks) for area in active_areas],
         "links": [
             {
                 "id": link.id,

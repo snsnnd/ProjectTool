@@ -18,6 +18,7 @@ import pytest
 
 import project_tool.storage.recovery as recovery_module
 import project_tool.storage.transaction as transaction_module
+from project_tool.application.service import ProjectService
 from project_tool.domain.errors import ProjectIOError
 from project_tool.domain.hashing import compute_rev
 from project_tool.integrations import filesystem
@@ -289,3 +290,28 @@ def test_doctor_reports_recoverable_transaction_then_repair(service):
     doctor = service.call("project.doctor", {})
     check = next(item for item in doctor["checks"] if item["name"] == "transactions")
     assert check["status"] == "ok"
+
+
+# ------------------------------------------- 新对象类型走同一条事务/恢复路径（V1-A）
+
+
+def test_area_create_crash_rolls_forward(service, monkeypatch, tmp_path):
+    """Area 与既有对象共用 staged/manifest/COMMIT 协议，不允许旁路写入。"""
+    crash_on_apply(monkeypatch, fail_after=0)
+    with pytest.raises(ProjectIOError):
+        service.call("area.create", {"name": "Core"})
+    monkeypatch.undo()
+
+    from project_tool.storage import recover_all, scan_transactions
+
+    scans = scan_transactions(service.paths)
+    assert scans and scans[0].status == "prepared"
+    results = recover_all(service.paths)
+    assert [r.action for r in results] == ["rolled_forward"]
+    assert not scan_transactions(service.paths)
+
+    reopened = ProjectService(service.opened)
+    assert [row["name"] for row in reopened.call("area.list")] == ["Core"]
+    assert reopened.call("project.doctor")["ok"] is True
+    # 幂等
+    assert not recover_all(service.paths)

@@ -21,6 +21,7 @@ from project_tool.domain.errors import (
     RevisionConflict,
 )
 from project_tool.domain.hashing import compute_rev
+from project_tool.domain.ids import CROCKFORD
 from project_tool.domain.task import Task
 from project_tool.domain.timeutil import now_local, parse_datetime
 from project_tool.graph import dependency as dependency_graph
@@ -39,6 +40,8 @@ UNSET: Any = object()
 
 WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:[\\/]")
 HANDLE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+_CROCKFORD_CHARS = set(CROCKFORD)
 
 MAX_CHAIN_HOPS = 1000
 CLOSED_MILESTONE_STATUSES = {"closed", "cancelled"}
@@ -147,6 +150,46 @@ class ServiceContext:
         return dedupe(
             [self.resolve_ref(obj_type, ref, allow_deleted=allow_deleted) for ref in as_list(refs)]
         )
+
+    def area_id(self, ref) -> str | None:
+        """Area 引用解析：接受 ID / 短 ID / 名称（大小写不敏感）。
+
+        名称不唯一时拒绝猜测（Area 名称本身不强制唯一，见 docs/09-v1a-design.md §2.5），
+        要求调用方用 ID/短 ID 消歧。
+        """
+        if ref is None or ref == "":
+            return None
+        text = str(ref).strip()
+        if not text:
+            return None
+        if text.upper().startswith("ARA-"):
+            return self.resolve_ref("area", text)
+        record = self.store.find_by_name("area", text)
+        if record is not None:
+            return str(record["id"])
+        matches = sorted(
+            path.stem for path in self.store.dir_for("area").glob(f"ARA-{text.upper()}*.json")
+        )
+        if len(matches) > 1:
+            raise InvalidArgument(
+                f"ambiguous area reference {ref!r}: matches {len(matches)} areas "
+                f"({', '.join(matches[:3])} ...)"
+            )
+        if len(matches) == 1:
+            return matches[0]
+        if not all(char in _CROCKFORD_CHARS for char in text.upper()):
+            # 不是合法短 ID 形态，也不是任何 Area 名 -> 名字没匹配上。
+            raise NotFound(
+                f"area {ref!r} not found (no area with that name, id or short id)"
+            )
+        return self.resolve_ref("area", text)
+
+    def require_area_id(self, ref) -> str:
+        """同 `area_id`，但空引用报错而不是返回 None。"""
+        resolved = self.area_id(ref)
+        if resolved is None:
+            raise InvalidArgument("empty area reference")
+        return resolved
 
     def member_id(self, ref: str, require_active: bool = False) -> str:
         member_id = resolve_member_id(self.store, ref)
@@ -300,6 +343,9 @@ class ServiceContext:
 
     def validate_task_parent_chain(self, task_id: str, parent_id: str | None) -> None:
         self._validate_chain("task", task_id, parent_id, "parent_task_id")
+
+    def validate_area_parent_chain(self, area_id: str, parent_id: str | None) -> None:
+        self._validate_chain("area", area_id, parent_id, "parent_area_id")
 
     def validate_goal_parent_chain(self, goal_id: str, parent_id: str | None) -> None:
         self._validate_chain("goal", goal_id, parent_id, "parent_goal_id")
