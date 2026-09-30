@@ -19,6 +19,7 @@ CLI：init status doctor migrate
 ```text
 账号系统 / Remote Server / 多人同步 / Webhook / KC 集成
 复杂权限 / Artifact / Artifact Snapshot / Git 自动扫描 / IDE 插件
+（Area / Artifact 本体在 V1-A 落地；Snapshot 与 Git 扫描仍在 V1-B）
 SQLite 索引 / Local Web UI / React 前端
 ```
 
@@ -48,20 +49,39 @@ ruff + mypy + GitHub Actions CI（Ubuntu + Windows, Python 3.12）
 全部只在 `.pjt` 副本执行并通过。结论：**无 P0/P1，适合持续使用**。
 报告：`dogfooding/report.md`；两个 P2 CLI 小项（`task ready`、`task.update expected_rev`）建议进 V1 前顺手补。
 
-### V1 — 增强与本地 Web
+### V1-A — UX / Contract Cleanup + Domain Completion（已完成，`0.2.0` / `SCHEMA_VERSION 1.1`）
 
-dogfooding 后调整顺序：真实摩擦最大的是“任务 ↔ 产物（文档/源码/提交/录制）”关联，
-因此 **Artifact 提前到 Git Adapter 之前**：
+V0.1 dogfooding 暴露的 P2/P3 中「已被真实使用证明有价值」的四项，先补齐再进 Git 感知层：
 
 ```text
-Artifact（file/url/git_commit locator + --snapshot；schema 见 docs/03 §4.8）
+✓ pjt task ready（V0.1 只有 start/block/review/done/cancel）
+✓ 统一 expected_rev contract（ServiceContext.require_expected_rev 一处实现，
+  覆盖全部修改型 operation；CLI 编辑命令 --expected-rev）
+✓ Area（ARA-）：稳定工作领域维度，与 Milestone（阶段/交付）分开
+✓ Artifact（ART-）：工程产物的**引用**（file/url/git_commit/git_branch + 10 种形态），
+  关联 Task / Decision / Milestone / Goal；verify 只读；绝不修改被引用文件
+✓ pjt task related-updates（API 早有，CLI 缺）+ pjt task artifacts
+✓ pjt --version 修复（V0.1 实际 exit 2，属文档承诺的接口）
+```
+
+设计记录：`docs/09-v1a-design.md`；EFW 验证：`dogfooding/v1a-area-analysis.md`。
+
+### V1-B — Git 感知层
+
+dogfooding 后调整顺序：真实摩擦最大的是“任务 ↔ 产物”关联，
+因此 **Artifact 提前到 Git Adapter 之前**（V1-A 已完成 Artifact）：
+
+```text
 Git Adapter（只读：pjt git status / scan，trailer: PJT-Task: TSK-…；支持 project root != git root）
+           Artifact 的 git_commit / git_branch locator 由此获得真实语义
 Search（本地结构化 + 全文）+ SQLite 索引（.pjt/local/index.sqlite，可重建）
-CLI 补齐：task ready、task.update expected_rev、task related_updates
 Local Web Server（FastAPI）+ React/TypeScript UI（Vite）
-Overview / Tasks(List+Board) / Graph / Timeline / Milestones / Goals /
+Overview / Tasks(List+Board) / Graph / Timeline / Milestones / Areas / Goals /
 Decisions / Artifacts / Members / Linked Projects / Settings
 ```
+
+V1-A **刻意未做**（留到有真实需求时）：Artifact 内容快照（blob/CAS）、
+Area 唯一名约束、Task 多 Area、Search / 索引。
 
 ### V2 — 远程协作
 

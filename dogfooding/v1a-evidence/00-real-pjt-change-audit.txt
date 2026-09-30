@@ -1,0 +1,69 @@
+===== REAL .pjt CHANGE AUDIT (V1-A) =====
+本轮对真实 new/efw/.pjt 的唯一写操作是 'pjt migrate'。
+
+--- 允许写入面: .pjt/** ---
+areas
+artifacts
+decisions
+goals
+links
+members
+milestones
+tasks
+updates
+
+--- areas/ 是 migrate 创建的空目录，没有对象 ---
+total 0
+drwxrwxrwx 1 aaa aaa 4096 Sep 30 15:47 .
+drwxrwxrwx 1 aaa aaa 4096 Sep 30 15:47 ..
+
+--- 唯一新增事件 ---
+{
+  "actor_id": "MBR-01M3R9H2TQJ9EB5G5ARPAJN7HE",
+  "base_rev": "sha256:c0f69c9214cd353327d4e5857cfac2b548aa53937be29ed375608a959a97faeb",
+  "device_id": "DEV-0E176553",
+  "entity_id": "PRJ-01M3R9F6DT0JFPXH0M417888MC",
+  "entity_type": "project",
+  "event_type": "project.migrated",
+  "id": "EVT-01M3RMGQ4EAMY7VRTG3AKXAHC8",
+  "new_rev": "sha256:e91737a630ac9a6cc07df1f3f9c4d9cf330ecdd46fa405188ef041a0002a7819",
+  "occurred_at": "2026-09-30T15:47:26.434421+08:00",
+  "payload": {
+    "fields": [
+      "schema_version"
+    ],
+    "from": "1.0",
+    "to": "1.1"
+  },
+  "project_id": "PRJ-01M3R9F6DT0JFPXH0M417888MC",
+  "schema_version": "1.1",
+  "transaction_id": "TXN-01M3RMGQ328Z25S4YWKC72BQYR"
+}
+
+--- Area / Artifact 对象数（必须为 0：真实数据未被自动重解释）---
+areas:     0
+artifacts: 0
+
+--- 4 个原始 milestone 原样保留（title 未变）---
+  MLS-01M3R9JJ  active   v1  页面内模型编辑
+  MLS-01M3R9JR  planned  v1  真机调试链路
+  MLS-01M3R9K8  planned  v1  桌面壳与打包
+  MLS-01M3R9KR  planned  v1  工程卫生
+
+--- 15 个真实 task 的 area_id 全为 null（未被自动归类）---
+  TSK-01M3R9M6  area_id=<absent>  store.updateModel 保存通路（revisio
+  TSK-01M3R9MD  area_id=<absent>  通信页行内编辑（信号/事件/队列增删改）
+  TSK-01M3R9MW  area_id=<absent>  数据流页句子行内编辑与拖动排序
+  TSK-01M3R9NE  area_id=<absent>  状态机页编辑（加状态/转换/条件）
+  TSK-01M3R9NY  area_id=<absent>  删除对象前的引用检查（信号/数据流/事件）
+  TSK-01M3R9P6  area_id=<absent>  serial/tcp 回环集成测试（socat/pty）
+  TSK-01M3R9PK  area_id=<absent>  真机 hash 不一致提示与 observe_port 模板
+  TSK-01M3R9Q5  area_id=<absent>  重建 desktop 主进程与 preload 白名单桥
+  TSK-01M3R9QN  area_id=<absent>  修复 package.json 脚本与 electron-b
+  TSK-01M3R9QW  area_id=<absent>  PyInstaller 后端打包脚本与 backend-bi
+  TSK-01M3R9R9  area_id=<absent>  打包发布 smoke test（安装包启动完整链路）
+  TSK-01M3R9RX  area_id=<absent>  ProcTransport.close 资源泄漏与测试 Re
+  TSK-01M3R9SC  area_id=<absent>  efw.h 聚合 msgq.h / efw_all.c 收录
+  TSK-01M3R9SM  area_id=<absent>  源码草稿持久化（崩溃恢复）
+  TSK-01M3R9ST  area_id=<absent>  完成 ProjectTool dogfooding 第一轮记
+  => 15/15 为 null/absent

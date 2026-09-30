@@ -1,0 +1,19 @@
+===== EFW POLLUTION CHECK (V1-A) =====
+
+--- framework git status: baseline vs final (byte-identical?) ---
+IDENTICAL  => 零新增修改（138 行，与本轮开始前完全相同）
+
+--- baseline 138 行 / final 138 行 ---
+
+--- git diff --stat -- new/efw: baseline vs final ---
+IDENTICAL  => EFW 源码/文档 diff 一个字节都没变
+ new/efw/.gitignore               |   4 +
+ new/efw/AGENTS.md                | 200 +++++++++++++++++++++------------------
+ new/efw/docs/03-runtime.md       |   4 +
+ new/efw/docs/04-debug-and-api.md |  11 ++-
+ new/efw/docs/05-ui-style.md      |  19 +++-
+ 5 files changed, 139 insertions(+), 99 deletions(-)
+
+--- 分支/HEAD 未变（无任何 git 写操作）---
+branch: tmp/new
+HEAD:   2cb4a7433d7ff77c769fa083abd8c9e151929633
