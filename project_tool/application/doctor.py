@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from project_tool.domain.enums import Lifecycle
+from project_tool.domain.artifact_locator import verify_locator
+from project_tool.domain.enums import ArtifactKind, Lifecycle
 from project_tool.domain.errors import ProjectToolError
 from project_tool.domain.hashing import verify_rev
 from project_tool.domain.ids import COLLECTION_BY_TYPE, PREFIX_BY_TYPE
@@ -190,12 +191,70 @@ def run_doctor(ctx) -> dict[str, Any]:
             check_ref("task", task_id, source)
         check_ref("decision", record.get("supersedes_id"), source)
 
+    for record in records_by_type.get("artifact", []):
+        source = str(record.get("id", "?"))
+        if record.get("lifecycle") == Lifecycle.DELETED.value:
+            continue
+        for task_id in record.get("related_task_ids", []) or []:
+            check_ref("task", task_id, source)
+        for decision_id in record.get("related_decision_ids", []) or []:
+            check_ref("decision", decision_id, source)
+        for milestone_id in record.get("related_milestone_ids", []) or []:
+            check_ref("milestone", milestone_id, source)
+        for goal_id in record.get("related_goal_ids", []) or []:
+            check_ref("goal", goal_id, source)
+
     if ref_errors:
         add("references", "error", f"{len(ref_errors)} broken reference(s)", ref_errors)
     elif ref_warnings:
         add("references", "warning", f"{len(ref_warnings)} reference(s) to deleted objects", ref_warnings)
     else:
         add("references", "ok", "all references valid")
+
+    # ------------------------------------------------------- artifact locators
+    # 语义分层：结构损坏 = error；工程文件暂时找不到 = warning（分支切换/删除很常见）。
+    locator_unsafe: list[str] = []
+    locator_missing: list[str] = []
+    locator_checked = 0
+    for record in records_by_type.get("artifact", []):
+        if record.get("lifecycle") == Lifecycle.DELETED.value:
+            continue
+        try:
+            kind = ArtifactKind(record.get("kind", ""))
+        except ValueError:
+            locator_unsafe.append(
+                f"{record.get('id')}: unknown kind {record.get('kind')!r}"
+            )
+            continue
+        try:
+            result = verify_locator(kind, str(record.get("locator", "")), ctx.paths.root)
+        except ProjectToolError as exc:
+            locator_unsafe.append(f"{record.get('id')}: {exc.message}")
+            continue
+        locator_checked += 1
+        if result["status"] == "missing":
+            locator_missing.append(f"{record.get('id')}: {result['detail']}")
+    if locator_unsafe:
+        add(
+            "artifacts.locators",
+            "error",
+            f"{len(locator_unsafe)} unsafe artifact locator(s)",
+            locator_unsafe,
+        )
+    elif locator_missing:
+        add(
+            "artifacts.locators",
+            "warning",
+            f"{len(locator_missing)} artifact file(s) not found under the project root "
+            f"(of {locator_checked} verifiable locator(s))",
+            locator_missing,
+        )
+    else:
+        add(
+            "artifacts.locators",
+            "ok",
+            f"{locator_checked} verifiable artifact locator(s) valid",
+        )
 
     # ------------------------------------------------------------- dependencies
     try:

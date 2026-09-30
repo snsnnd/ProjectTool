@@ -91,8 +91,8 @@ def test_cli_doctor_repair_cleans_staging(tmp_path):
 
 def test_cli_all_help_pages_build(tmp_path):
     groups = [
-        None, "task", "area", "goal", "milestone", "member",
-        "update", "decision", "link", "log", "graph",
+        None, "task", "area", "artifact", "goal", "milestone",
+        "member", "update", "decision", "link", "log", "graph",
     ]
     for group in groups:
         args = [group, "--help"] if group else ["--help"]

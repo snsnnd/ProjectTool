@@ -19,6 +19,7 @@ from typing import Any
 from project_tool.application.context import ServiceContext, resolve_actor
 from project_tool.application.registry import MethodSpec, build_registry
 from project_tool.application.services.area import AreaService
+from project_tool.application.services.artifact import ArtifactService
 from project_tool.application.services.decision import DecisionService
 from project_tool.application.services.goal import GoalService
 from project_tool.application.services.graph import GraphService
@@ -54,6 +55,7 @@ class ProjectService:
         self.members = MemberService(self.ctx)
         self.updates = UpdateService(self.ctx)
         self.decisions = DecisionService(self.ctx)
+        self.artifacts = ArtifactService(self.ctx)
         self.links = LinkService(self.ctx)
         self.logs = LogService(self.ctx)
         self.graphs = GraphService(self.ctx, self.links)

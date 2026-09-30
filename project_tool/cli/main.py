@@ -6,6 +6,7 @@
 cli/project.py    init / status / doctor / migrate
 cli/task.py       pjt task ...
 cli/area.py       pjt area ...
+cli/artifact.py   pjt artifact ...
 cli/goal.py       pjt goal ...
 cli/milestone.py  pjt milestone ...
 cli/member.py     pjt member ...
@@ -28,6 +29,7 @@ import typer
 from project_tool import __version__
 from project_tool.cli import (
     area,
+    artifact,
     decision,
     goal,
     link,
@@ -74,6 +76,7 @@ app.command()(project_module.migrate)
 
 app.add_typer(task.task_app, name="task")
 app.add_typer(area.area_app, name="area")
+app.add_typer(artifact.artifact_app, name="artifact")
 app.add_typer(goal.goal_app, name="goal")
 app.add_typer(milestone.milestone_app, name="milestone")
 app.add_typer(member.member_app, name="member")

@@ -265,16 +265,44 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
 ```json
 {
   "id": "ART-01K8H71R9M", "type": "artifact",
-  "kind": "git_commit",
-  "title": "TCP Transport implementation",
-  "locator": "git:commit:8f31ab2",
-  "task_ids": ["TSK-01K8H2MBQX"],
+  "name": "TCP Transport implementation",
+  "description": "",
+  "kind": "file",
+  "locator": "studio_core/debug.py",
+  "related_task_ids": ["TSK-01K8H2MBQX"],
+  "related_decision_ids": ["DEC-01K8H51CJ7"],
+  "related_milestone_ids": [],
+  "related_goal_ids": [],
   "metadata": {}
 }
 ```
 
-`kind` ∈ `file url git_commit git_branch release build report dataset model document design hardware image other`。
-默认只记录引用；`--snapshot` 才进内容存储。
+`kind` ∈ `file url git_commit git_branch release build report dataset model document
+design hardware image other`。
+
+**Reference，不是存储**：
+
+- 只保存 `kind` + `locator`；没有 blob / CAS / snapshot / upload / 远端存储。
+- **绝不修改被引用的文件**：`artifact.remove` 只软删除 Artifact 对象
+  （`lifecycle=deleted`），不 copy / move / delete / rename / rewrite 工程文件。
+- 关系数组放在 Artifact 上（不建独立 relation 对象）：`artifact.attach --task T`
+  只写一个文件，与并发编辑 Task 的操作不冲突；反向查询（`task.related_artifacts`）
+  是 file scan 派生读。
+
+**Locator 规则**（canonical 形态：相对 POSIX 路径，统一 `/`）：
+
+| kind | 例子 | 校验 |
+|---|---|---|
+| `file` | `studio_core/debug.py` | 必须是 project-relative 路径；禁绝对路径 / 盘符 / UNC / `..` / `.pjt/**` |
+| `url` | `https://…` | http(s) + netloc（**不做网络请求**） |
+| `git_commit` | `abc123` | 4–40 位十六进制（Git Adapter 未启用，只存引用） |
+| `git_branch` | `feature/foo` | git ref-name 字符集，无 `..` |
+| 其余 10 种 | `brd rev C` | 不透明引用；只守住「非机器本地绝对路径」「不逃出 project root」 |
+
+`artifact.verify` 是**纯查询**：不产生事件、不修改文件。`file` 检查存在性，
+`url` 只校验格式，`git_*` 报告「adapter 未启用」，其余标记 `skipped`。
+doctor 对「file 不存在」报 **warning**（分支切换/删除是正常现象），
+对「locator 越界」和「related ID 指向不存在的对象」报 **error**。
 
 ### 4.9 Project Link
 
@@ -404,6 +432,7 @@ Event       entity_id → 任意对象
 | area self parent | 拒绝 | `INVALID_ARGUMENT` |
 | Task 引用 deleted area | 拒绝 | `INVALID_ARGUMENT` |
 | artifact.file locator 绝对路径 / `..` / `.pjt/**` | 拒绝 | `INVALID_ARGUMENT` |
+| 非 file kind 的 locator 是机器本地绝对路径 / 含 `..` | 拒绝 | `INVALID_ARGUMENT` |
 | artifact.url 非 http(s) / 缺 netloc | 拒绝 | `INVALID_ARGUMENT` |
 | `expected_rev` 与当前 rev 不符 | 拒绝（省略则用当前 rev 作 base_rev） | `REVISION_CONFLICT` |
 | decision supersede 环 / 自我取代 | 拒绝 | `HIERARCHY_CYCLE` / `INVALID_ARGUMENT` |

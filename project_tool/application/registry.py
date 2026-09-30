@@ -31,6 +31,7 @@ def build_registry(service) -> dict[str, MethodSpec]:
     members = service.members
     updates = service.updates
     decisions = service.decisions
+    artifacts = service.artifacts
     links = service.links
     logs = service.logs
     graphs = service.graphs
@@ -102,6 +103,13 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec("task.restore", tasks.task_restore, True, "task", "restore task"),
         MethodSpec("task.delete", tasks.task_delete, True, "task", "soft delete task"),
         MethodSpec("task.related_updates", tasks.task_related_updates, False, "task", "related updates"),
+        MethodSpec(
+            "task.related_artifacts",
+            tasks.task_related_artifacts,
+            False,
+            "task",
+            "related artifacts",
+        ),
         MethodSpec("task.history", tasks.task_history, False, "task", "task event history"),
         # member
         MethodSpec("member.add", members.member_add, True, "member", "add member"),
@@ -134,6 +142,26 @@ def build_registry(service) -> dict[str, MethodSpec]:
             "decision.supersede", decisions.decision_supersede, True, "decision", "supersede decision"
         ),
         MethodSpec("decision.history", decisions.decision_history, False, "decision", "decision history"),
+        # artifact
+        MethodSpec(
+            "artifact.create", artifacts.artifact_create, True, "artifact", "reference an artifact"
+        ),
+        MethodSpec("artifact.get", artifacts.artifact_get, False, "artifact", "read artifact"),
+        MethodSpec("artifact.list", artifacts.artifact_list, False, "artifact", "list artifacts"),
+        MethodSpec("artifact.update", artifacts.artifact_update, True, "artifact", "update artifact"),
+        MethodSpec(
+            "artifact.remove", artifacts.artifact_remove, True, "artifact", "drop the reference only"
+        ),
+        MethodSpec(
+            "artifact.attach", artifacts.artifact_attach, True, "artifact", "attach to task/decision"
+        ),
+        MethodSpec(
+            "artifact.detach", artifacts.artifact_detach, True, "artifact", "detach from task/decision"
+        ),
+        MethodSpec("artifact.verify", artifacts.artifact_verify, False, "artifact", "verify locators"),
+        MethodSpec(
+            "artifact.history", artifacts.artifact_history, False, "artifact", "artifact event history"
+        ),
         # link
         MethodSpec("link.add", links.link_add, True, "link", "add linked project"),
         MethodSpec("link.get", links.link_get, False, "link", "read link"),

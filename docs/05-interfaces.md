@@ -68,6 +68,23 @@ system.capabilities
 | `project.migrate` | schema 升级入口（1.0→1.1：补齐集合目录 + 抬升 project schema_version） | ✓ |
 | `project.recover` | 事务 roll-forward + 清理陈旧锁 | ✓ |
 
+### artifact
+
+```text
+artifact.create  artifact.get  artifact.list  artifact.update  artifact.remove
+artifact.attach  artifact.detach  artifact.verify  artifact.history
+```
+
+全部 V1-A ✓。`artifact.verify` 是**只读查询，不产生事件**；`artifact.remove` 只删引用对象。
+
+```bash
+pjt artifact add file studio_core/debug.py --name "Debug transport" --task TSK-…
+pjt artifact add --kind url --locator https://…     # 形态 kind 时用选项
+pjt artifact attach ART-… --task TSK-… --milestone MLS-…
+pjt artifact verify [ART-…]                          # 省略 = 全部
+pjt task artifacts TSK-…
+```
+
 ### area
 
 ```text
@@ -112,7 +129,7 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
 | `log.list` `log.get` `log.entity` `log.member` `log.since` | 事件历史 | ✓ |
 | `graph.project` `graph.tasks` `graph.dependencies` `graph.links` | 项目图 | ✓ |
 | `search.query` | 全文/结构化搜索 | ○（V1-B） |
-| `artifact.*` | 产物引用 | ○（V1-A，见下） |
+| `artifact.*` | 产物引用 | ✓（V1-A，见下） |
 | `git.*` | Git 集成 | ○（V1） |
 | `sync.*` | 远程同步 | ○（V2） |
 
@@ -204,6 +221,7 @@ pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
           |archive|restore|delete|history
 pjt area add|list|show|tree|edit|archive|restore
+pjt artifact add|list|show|edit|attach|detach|remove|verify|history
 pjt member add|list|show|edit|deactivate|activate|workload|activity|use
 pjt update add|list|show
 pjt decision add|list|show|accept|reject|supersede
@@ -235,6 +253,10 @@ pjt graph [tasks|milestone <id>|projects]
 | `task.add_dependency/remove` | `PUT/DELETE /api/v1/tasks/{id}/dependencies/{target_id}` |
 | `milestone.activate/close/cancel` | `POST /api/v1/milestones/{id}/{action}` |
 | `decision.accept/reject/supersede` | `POST /api/v1/decisions/{id}/{action}` |
+| `area.create/list/get/update` | `POST/GET/PATCH /api/v1/areas[/{id}]` |
+| `artifact.create/list/get/update/remove` | `POST/GET/PATCH/DELETE /api/v1/artifacts[/{id}]` |
+| `artifact.attach/detach` | `POST/DELETE /api/v1/artifacts/{id}/relations` |
+| `artifact.verify` | `POST /api/v1/artifacts/verify` |
 | `project.recover` | `POST /api/v1/project/recover` |
 | `log.list` | `GET /api/v1/events?entity_type=&since=&limit=&cursor=` |
 | `search.query` | `GET /api/v1/search?q=&types=&status=&owner=&label=` |

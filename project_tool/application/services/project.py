@@ -21,7 +21,7 @@ from project_tool.version import SCHEMA_VERSION
 
 CAPABILITIES_FEATURES = {
     "area": True,
-    "artifact": False,
+    "artifact": True,
     "git": False,
     "search": False,
     "web": False,

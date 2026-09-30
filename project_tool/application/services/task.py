@@ -11,6 +11,7 @@ from project_tool.application.context import (
     enum_value,
     normalize_labels,
 )
+from project_tool.domain.artifact import Artifact
 from project_tool.domain.enums import DependencyRelation, Lifecycle, Priority, TaskStatus
 from project_tool.domain.errors import DependencyCycle, InvalidArgument, NotFound
 from project_tool.domain.ids import new_id
@@ -125,6 +126,18 @@ class TaskService:
             for update in self.ctx.store.list_models("update")
             if full_id in cast(Update, update).task_ids
         ]
+
+    def task_related_artifacts(self, task_id, include_deleted=False) -> list[dict[str, Any]]:
+        """Task 关联的 Artifact（派生读：file scan `objects/artifacts/`，不建索引）。"""
+        full_id = self.ctx.resolve_ref("task", task_id, allow_deleted=True)
+        rows = []
+        for model in self.ctx.store.list_models("artifact", include_deleted=include_deleted):
+            artifact = cast(Artifact, model)
+            if artifact.lifecycle == Lifecycle.DELETED and not include_deleted:
+                continue
+            if full_id in artifact.related_task_ids:
+                rows.append(artifact.model_dump(mode="json"))
+        return rows
 
     def task_history(self, task_id) -> dict[str, Any]:
         return self.ctx.history("task", task_id)

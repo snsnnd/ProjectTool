@@ -16,6 +16,9 @@ def test_capabilities_exposes_methods_and_features(service):
         "project.recover",
         "area.create",
         "area.list",
+        "artifact.create",
+        "artifact.verify",
+        "task.related_artifacts",
         "task.create",
         "task.move_area",
         "task.set_status",
@@ -34,6 +37,7 @@ def test_capabilities_exposes_methods_and_features(service):
     }
     # V1-A 打开 area；V1-B 之后的层保持 false。
     assert caps["features"]["area"] is True
+    assert caps["features"]["artifact"] is True
     assert not any(
         caps["features"][name] for name in ("git", "search", "web", "remote", "sync")
     )
@@ -41,8 +45,8 @@ def test_capabilities_exposes_methods_and_features(service):
 
 def test_registry_covers_every_declared_domain(service):
     categories = {spec.category for spec in service.registry.values()}
-    assert {"system", "project", "area", "task", "milestone", "goal", "member", "update",
-            "decision", "link", "log", "graph"} <= categories
+    assert {"system", "project", "area", "artifact", "task", "milestone", "goal",
+            "member", "update", "decision", "link", "log", "graph"} <= categories
 
 
 def test_registry_specs_have_metadata(service):

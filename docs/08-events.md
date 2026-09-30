@@ -73,6 +73,10 @@ Event 是 Project Tool 的不可变历史。本文件定义 V0.1 的 event 契�
 | `decision.created` | decision | `{title}` | |
 | `decision.updated` | decision | `{fields*}` | `supersedes_id` 变更时 fields 含它 |
 | `decision.status_changed` | decision | `{from, to}` | draft/accepted/rejected/superseded |
+| `artifact.created` | artifact | `{name, kind, locator}` | `base_rev=null` |
+| `artifact.updated` | artifact | `{fields*}` | |
+| `artifact.attached` / `artifact.detached` | artifact | `{relations*: [{relation, id, attached}]}` | `relation` ∈ task/decision/milestone/goal |
+| `artifact.removed` | artifact | `{lifecycle}` | 只删引用对象，不动被引用文件 |
 | `link.added` | link | `{name, kind}` | |
 | `link.updated` | link | `{fields*}` | |
 | `link.removed` | link | `{}` | 软删除（lifecycle=deleted） |

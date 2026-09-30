@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from project_tool.domain.area import Area
+from project_tool.domain.artifact import Artifact
 from project_tool.domain.base import BaseObject
 from project_tool.domain.decision import Decision
 from project_tool.domain.errors import InvalidArgument, NotFound, ProjectCorrupted
@@ -28,6 +29,7 @@ MODEL_BY_TYPE: dict[str, type[BaseObject]] = {
     "milestone": Milestone,
     "area": Area,
     "task": Task,
+    "artifact": Artifact,
     "member": Member,
     "update": Update,
     "decision": Decision,

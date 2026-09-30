@@ -9,6 +9,7 @@ import typer
 from project_tool.cli.common import ExpectedRev, console, execute, sid
 from project_tool.cli.render import (
     porcelain_tasks,
+    render_artifact_list,
     render_events,
     render_task_show,
     render_task_table,
@@ -357,6 +358,20 @@ def task_related_updates(
         "task.related_updates",
         {"task_id": task_id},
         render=lambda r: (render_update_list(r) if r else console.print("[dim]no updates[/dim]")),
+    )
+
+
+@task_app.command("artifacts")
+def task_artifacts(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+) -> None:
+    """Show artifacts referenced by a task."""
+    execute(
+        ctx,
+        "task.related_artifacts",
+        {"task_id": task_id},
+        render=lambda r: (render_artifact_list(r) if r else console.print("[dim]no artifacts[/dim]")),
     )
 
 

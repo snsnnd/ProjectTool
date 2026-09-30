@@ -315,3 +315,27 @@ def test_area_create_crash_rolls_forward(service, monkeypatch, tmp_path):
     assert reopened.call("project.doctor")["ok"] is True
     # 幂等
     assert not recover_all(service.paths)
+
+
+def test_artifact_attach_crash_rolls_forward(service, monkeypatch, tmp_path):
+    (tmp_path / "studio_core").mkdir()
+    (tmp_path / "studio_core" / "debug.py").write_text("x = 1\n", encoding="utf-8")
+    artifact = service.call(
+        "artifact.create", {"name": "debug transport", "kind": "file", "locator": "studio_core/debug.py"}
+    )
+    task = service.call("task.create", {"title": "loopback test"})
+
+    crash_on_apply(monkeypatch, fail_after=0)
+    with pytest.raises(ProjectIOError):
+        service.call("artifact.attach", {"artifact_id": artifact["id"], "task": task["id"]})
+    monkeypatch.undo()
+
+    from project_tool.storage import recover_all, scan_transactions
+
+    assert scan_transactions(service.paths)[0].status == "prepared"
+    assert [r.action for r in recover_all(service.paths)] == ["rolled_forward"]
+
+    reopened = ProjectService(service.opened)
+    attached = reopened.call("artifact.get", {"artifact_id": artifact["id"]})
+    assert attached["related_task_ids"] == [task["id"]]
+    assert reopened.call("project.doctor")["ok"] is True
