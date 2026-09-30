@@ -18,6 +18,7 @@ from project_tool.domain.errors import (
     InvalidArgument,
     NotFound,
     ProjectToolError,
+    RevisionConflict,
 )
 from project_tool.domain.hashing import compute_rev
 from project_tool.domain.task import Task
@@ -195,6 +196,28 @@ class ServiceContext:
 
     # ------------------------------------------------------------------ 写入
 
+    def require_expected_rev(self, obj_type: str, model, expected_rev: str | None) -> str:
+        """统一 optimistic concurrency contract（docs/09-v1a-design.md §4）。
+
+        ```text
+        expected_rev 省略 -> 返回当前 canonical rev 作为 transaction base_rev
+        expected_rev 提供 -> 必须等于当前 canonical rev，否则 REVISION_CONFLICT
+        ```
+
+        所有修改已有 canonical object 的 operation 都必须经过这里，不允许各领域
+        自行复制比较逻辑，也不允许某些领域语义不同。返回值就是 `save()` 的 base_rev；
+        事务层仍会在提交前对全部 touched 对象重校验 base_rev。
+        """
+        current = str(getattr(model, "rev", "") or "")
+        if expected_rev is not None and expected_rev != current:
+            raise RevisionConflict(
+                f"{obj_type} {getattr(model, 'id', '?')} rev mismatch",
+                expected_rev=expected_rev,
+                actual_rev=current,
+                entity_id=str(getattr(model, "id", "")) or None,
+            )
+        return current
+
     def prepare(self, model, is_create: bool) -> dict[str, Any]:
         now = now_local()
         if is_create:
@@ -241,12 +264,14 @@ class ServiceContext:
         ref,
         lifecycle: Lifecycle,
         event_type: str,
+        expected_rev: str | None = None,
     ) -> dict[str, Any]:
         model = self.load(obj_type, ref)
+        base = self.require_expected_rev(obj_type, model, expected_rev)
         if model.lifecycle == lifecycle:
             return model.model_dump(mode="json")
         model.lifecycle = lifecycle
-        return self.save(model, model.rev, event_type, {"lifecycle": lifecycle.value})
+        return self.save(model, base, event_type, {"lifecycle": lifecycle.value})
 
     def history(self, entity_type: str, ref) -> dict[str, Any]:
         full_id = self.store.resolve(entity_type, ref)

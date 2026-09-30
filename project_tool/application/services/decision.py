@@ -82,8 +82,10 @@ class DecisionService:
         alternatives=None,
         consequences=None,
         related_task_ids=None,
+        expected_rev=None,
     ) -> dict[str, Any]:
         record = self.ctx.load("decision", decision_id)
+        base = self.ctx.require_expected_rev("decision", record, expected_rev)
         fields: list[str] = []
         if title is not None:
             record.title = optional_title(title)
@@ -108,21 +110,21 @@ class DecisionService:
             fields.append("related_task_ids")
         if not fields:
             return record.model_dump(mode="json")
-        return self.ctx.save(record, record.rev, "decision.updated", {"fields": fields})
+        return self.ctx.save(record, base, "decision.updated", {"fields": fields})
 
-    def decision_accept(self, decision_id) -> dict[str, Any]:
-        return self._set_status(decision_id, DecisionStatus.ACCEPTED)
+    def decision_accept(self, decision_id, expected_rev=None) -> dict[str, Any]:
+        return self._set_status(decision_id, DecisionStatus.ACCEPTED, expected_rev)
 
-    def decision_reject(self, decision_id) -> dict[str, Any]:
-        return self._set_status(decision_id, DecisionStatus.REJECTED)
+    def decision_reject(self, decision_id, expected_rev=None) -> dict[str, Any]:
+        return self._set_status(decision_id, DecisionStatus.REJECTED, expected_rev)
 
-    def decision_supersede(self, old_id, new_id) -> dict[str, Any]:
+    def decision_supersede(self, old_id, new_id, expected_rev=None) -> dict[str, Any]:
         old = self.ctx.load("decision", old_id)
+        old_base = self.ctx.require_expected_rev("decision", old, expected_rev)
         new = self.ctx.load("decision", new_id)
         if old.id == new.id:
             raise InvalidArgument("a decision cannot supersede itself")
         self.ctx.validate_decision_supersede(old.id, new.id)
-        old_base = old.rev
         new_base = new.rev
         old_status = old.status
         old.status = DecisionStatus.SUPERSEDED
@@ -161,15 +163,18 @@ class DecisionService:
     def decision_history(self, decision_id) -> dict[str, Any]:
         return self.ctx.history("decision", decision_id)
 
-    def _set_status(self, decision_id, status: DecisionStatus) -> dict[str, Any]:
+    def _set_status(
+        self, decision_id, status: DecisionStatus, expected_rev: str | None = None
+    ) -> dict[str, Any]:
         record = self.ctx.load("decision", decision_id)
+        base = self.ctx.require_expected_rev("decision", record, expected_rev)
         if record.status == status:
             return record.model_dump(mode="json")
         old = record.status
         record.status = status
         return self.ctx.save(
             record,
-            record.rev,
+            base,
             "decision.status_changed",
             {"from": old.value, "to": status.value},
         )

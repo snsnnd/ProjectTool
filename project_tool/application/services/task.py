@@ -12,7 +12,7 @@ from project_tool.application.context import (
     normalize_labels,
 )
 from project_tool.domain.enums import DependencyRelation, Lifecycle, Priority, TaskStatus
-from project_tool.domain.errors import DependencyCycle, InvalidArgument, NotFound, RevisionConflict
+from project_tool.domain.errors import DependencyCycle, InvalidArgument, NotFound
 from project_tool.domain.ids import new_id
 from project_tool.domain.task import Dependency, Task
 from project_tool.domain.timeutil import now_local
@@ -138,9 +138,10 @@ class TaskService:
         labels=None,
         acceptance_criteria=None,
         due_at=UNSET,
+        expected_rev=None,
     ) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
-        base = task.rev
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         fields: list[str] = []
         if title is not None:
             task.title = optional_title(title)
@@ -187,13 +188,7 @@ class TaskService:
 
     def task_set_status(self, task_id, status, expected_rev=None) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
-        if expected_rev and task.rev != expected_rev:
-            raise RevisionConflict(
-                f"task {task.id} rev mismatch",
-                expected_rev=expected_rev,
-                actual_rev=task.rev,
-                entity_id=task.id,
-            )
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         new_status = enum_value(TaskStatus, status, "status")
         old = task.status
         if old == new_status:
@@ -208,7 +203,7 @@ class TaskService:
             task.completed_at = None
         self.ctx.save(
             task,
-            task.rev,
+            base,
             "task.status_changed",
             {"from": old.value, "to": new_status.value},
         )
@@ -216,26 +211,31 @@ class TaskService:
 
     # ------------------------------------------------------------- 分配/依赖
 
-    def task_assign(self, task_id, member) -> dict[str, Any]:
+    def task_assign(self, task_id, member, expected_rev=None) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         member_id = self.ctx.member_id(member, require_active=True)
         if member_id in task.owner_ids:
             return self.ctx.task_view(task)
         task.owner_ids.append(member_id)
-        self.ctx.save(task, task.rev, "task.assigned", {"member_id": member_id})
+        self.ctx.save(task, base, "task.assigned", {"member_id": member_id})
         return self.ctx.task_view(task)
 
-    def task_unassign(self, task_id, member) -> dict[str, Any]:
+    def task_unassign(self, task_id, member, expected_rev=None) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         member_id = self.ctx.member_id(member)
         if member_id not in task.owner_ids:
             raise NotFound(f"task {task.id} has no owner {member_id}")
         task.owner_ids = [owner for owner in task.owner_ids if owner != member_id]
-        self.ctx.save(task, task.rev, "task.unassigned", {"member_id": member_id})
+        self.ctx.save(task, base, "task.unassigned", {"member_id": member_id})
         return self.ctx.task_view(task)
 
-    def task_add_dependency(self, task_id, target_id, relation="depends_on") -> dict[str, Any]:
+    def task_add_dependency(
+        self, task_id, target_id, relation="depends_on", expected_rev=None
+    ) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         target = self.ctx.resolve_ref("task", target_id)
         if target == task.id:
             raise InvalidArgument("a task cannot depend on itself")
@@ -254,46 +254,50 @@ class TaskService:
         task.dependencies.append(Dependency(task_id=target, relation=relation_enum))
         self.ctx.save(
             task,
-            task.rev,
+            base,
             "task.dependency_added",
             {"target_id": target, "relation": relation_enum.value},
         )
         return self.ctx.task_view(task)
 
-    def task_remove_dependency(self, task_id, target_id) -> dict[str, Any]:
+    def task_remove_dependency(self, task_id, target_id, expected_rev=None) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         target = self.ctx.resolve_ref("task", target_id, allow_deleted=True)
         remaining = [dep for dep in task.dependencies if dep.task_id != target]
         if len(remaining) == len(task.dependencies):
             raise NotFound(f"task {task.id} has no dependency on {target}")
         task.dependencies = remaining
-        self.ctx.save(task, task.rev, "task.dependency_removed", {"target_id": target})
+        self.ctx.save(task, base, "task.dependency_removed", {"target_id": target})
         return self.ctx.task_view(task)
 
     # ------------------------------------------------------------- 标签/层级
 
-    def task_add_label(self, task_id, label) -> dict[str, Any]:
+    def task_add_label(self, task_id, label, expected_rev=None) -> dict[str, Any]:
         text = require_label(label)
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         if text in task.labels:
             return self.ctx.task_view(task)
         task.labels.append(text)
-        self.ctx.save(task, task.rev, "task.label_added", {"label": text})
+        self.ctx.save(task, base, "task.label_added", {"label": text})
         self.ctx.rebuild_labels()
         return self.ctx.task_view(task)
 
-    def task_remove_label(self, task_id, label) -> dict[str, Any]:
+    def task_remove_label(self, task_id, label, expected_rev=None) -> dict[str, Any]:
         text = require_label(label)
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         if text not in task.labels:
             raise NotFound(f"task {task.id} has no label {text!r}")
         task.labels = [item for item in task.labels if item != text]
-        self.ctx.save(task, task.rev, "task.label_removed", {"label": text})
+        self.ctx.save(task, base, "task.label_removed", {"label": text})
         self.ctx.rebuild_labels()
         return self.ctx.task_view(task)
 
-    def task_move_milestone(self, task_id, milestone_id) -> dict[str, Any]:
+    def task_move_milestone(self, task_id, milestone_id, expected_rev=None) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         old_value = task.milestone_id
         new_value = self.ctx.assert_milestone_open(milestone_id, current=old_value)
         if old_value == new_value:
@@ -301,14 +305,15 @@ class TaskService:
         task.milestone_id = new_value
         self.ctx.save(
             task,
-            task.rev,
+            base,
             "task.updated",
             {"fields": ["milestone_id"], "from": old_value, "to": new_value},
         )
         return self.ctx.task_view(task)
 
-    def task_set_parent(self, task_id, parent_task_id) -> dict[str, Any]:
+    def task_set_parent(self, task_id, parent_task_id, expected_rev=None) -> dict[str, Any]:
         task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev)
         new_parent = self.ctx.ref_or_none("task", parent_task_id)
         if new_parent == task.id:
             raise InvalidArgument("a task cannot be its own parent")
@@ -316,19 +321,25 @@ class TaskService:
         if task.parent_task_id == new_parent:
             return self.ctx.task_view(task)
         task.parent_task_id = new_parent
-        self.ctx.save(task, task.rev, "task.updated", {"fields": ["parent_task_id"]})
+        self.ctx.save(task, base, "task.updated", {"fields": ["parent_task_id"]})
         return self.ctx.task_view(task)
 
     # ------------------------------------------------------------- 生命周期
 
-    def task_archive(self, task_id) -> dict[str, Any]:
-        return self.ctx.set_lifecycle("task", task_id, Lifecycle.ARCHIVED, "object.archived")
+    def task_archive(self, task_id, expected_rev=None) -> dict[str, Any]:
+        return self.ctx.set_lifecycle(
+            "task", task_id, Lifecycle.ARCHIVED, "object.archived", expected_rev
+        )
 
-    def task_restore(self, task_id) -> dict[str, Any]:
-        return self.ctx.set_lifecycle("task", task_id, Lifecycle.ACTIVE, "object.restored")
+    def task_restore(self, task_id, expected_rev=None) -> dict[str, Any]:
+        return self.ctx.set_lifecycle(
+            "task", task_id, Lifecycle.ACTIVE, "object.restored", expected_rev
+        )
 
-    def task_delete(self, task_id) -> dict[str, Any]:
-        return self.ctx.set_lifecycle("task", task_id, Lifecycle.DELETED, "object.deleted")
+    def task_delete(self, task_id, expected_rev=None) -> dict[str, Any]:
+        return self.ctx.set_lifecycle(
+            "task", task_id, Lifecycle.DELETED, "object.deleted", expected_rev
+        )
 
     # ----------------------------------------------------------------- 内部
 

@@ -44,9 +44,7 @@ class MilestoneService:
 
     def milestone_get(self, milestone_id) -> dict[str, Any]:
         milestone = self.ctx.load("milestone", milestone_id)
-        view = project_graph.milestone_summary(milestone, self.ctx.tasks_by_id())
-        view["description"] = milestone.description
-        return view
+        return project_graph.milestone_summary(milestone, self.ctx.tasks_by_id())
 
     def milestone_list(
         self,
@@ -75,9 +73,10 @@ class MilestoneService:
         goal_ids=None,
         due_at=UNSET,
         status=None,
+        expected_rev=None,
     ) -> dict[str, Any]:
         milestone = self.ctx.load("milestone", milestone_id)
-        base = milestone.rev
+        base = self.ctx.require_expected_rev("milestone", milestone, expected_rev)
         fields: list[str] = []
         if title is not None:
             milestone.title = optional_title(title)
@@ -98,14 +97,20 @@ class MilestoneService:
             return milestone.model_dump(mode="json")
         return self.ctx.save(milestone, base, "milestone.updated", {"fields": fields})
 
-    def milestone_activate(self, milestone_id) -> dict[str, Any]:
-        return self._set_status(milestone_id, MilestoneStatus.ACTIVE, "milestone.activated")
+    def milestone_activate(self, milestone_id, expected_rev=None) -> dict[str, Any]:
+        return self._set_status(
+            milestone_id, MilestoneStatus.ACTIVE, "milestone.activated", expected_rev
+        )
 
-    def milestone_close(self, milestone_id) -> dict[str, Any]:
-        return self._set_status(milestone_id, MilestoneStatus.CLOSED, "milestone.closed")
+    def milestone_close(self, milestone_id, expected_rev=None) -> dict[str, Any]:
+        return self._set_status(
+            milestone_id, MilestoneStatus.CLOSED, "milestone.closed", expected_rev
+        )
 
-    def milestone_cancel(self, milestone_id) -> dict[str, Any]:
-        return self._set_status(milestone_id, MilestoneStatus.CANCELLED, "milestone.cancelled")
+    def milestone_cancel(self, milestone_id, expected_rev=None) -> dict[str, Any]:
+        return self._set_status(
+            milestone_id, MilestoneStatus.CANCELLED, "milestone.cancelled", expected_rev
+        )
 
     def milestone_progress(self, milestone_id) -> dict[str, Any]:
         milestone = self.ctx.load("milestone", milestone_id)
@@ -116,15 +121,17 @@ class MilestoneService:
         milestone_id,
         status: MilestoneStatus,
         event_type: str,
+        expected_rev: str | None = None,
     ) -> dict[str, Any]:
         milestone = self.ctx.load("milestone", milestone_id)
+        base = self.ctx.require_expected_rev("milestone", milestone, expected_rev)
         if milestone.status == status:
             return milestone.model_dump(mode="json")
         old = milestone.status
         milestone.status = status
         return self.ctx.save(
             milestone,
-            milestone.rev,
+            base,
             event_type,
             {"from": old.value, "to": status.value},
         )

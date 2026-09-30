@@ -114,6 +114,7 @@ def milestone_summary(milestone: Milestone, tasks: dict[str, Task]) -> dict[str,
     return {
         "id": milestone.id,
         "title": milestone.title,
+        "description": milestone.description,
         "status": milestone.status.value,
         "goal_ids": list(milestone.goal_ids),
         "due_at": milestone.due_at.isoformat() if milestone.due_at else None,
@@ -123,6 +124,10 @@ def milestone_summary(milestone: Milestone, tasks: dict[str, Task]) -> dict[str,
         "total_weight": total_weight,
         "progress": progress,
         "empty": total_weight == 0,
+        # 并发契约：读视图必须能拿到 rev，调用方才能带 expected_rev 写回。
+        "version": milestone.version,
+        "rev": milestone.rev,
+        "lifecycle": milestone.lifecycle.value,
     }
 
 

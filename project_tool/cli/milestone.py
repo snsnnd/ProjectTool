@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from project_tool.cli.common import bar, console, execute
+from project_tool.cli.common import ExpectedRev, bar, console, execute
 from project_tool.cli.render import render_milestone_list, render_milestone_show
 
 milestone_app = typer.Typer(help="Milestone management", no_args_is_help=True)
@@ -64,6 +64,8 @@ def milestone_edit(
     description: Annotated[str | None, typer.Option("--description", "-d")] = None,
     goal: Annotated[list[str] | None, typer.Option("--goal", "-g")] = None,
     due: Annotated[str | None, typer.Option("--due")] = None,
+    status: Annotated[str | None, typer.Option("--status")] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Edit a milestone."""
     params: dict = {
@@ -71,6 +73,8 @@ def milestone_edit(
         "title": title,
         "description": description,
         "goal_ids": goal,
+        "status": status,
+        "expected_rev": expected_rev,
     }
     if due is not None:
         params["due_at"] = due

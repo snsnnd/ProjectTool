@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from project_tool.cli.common import console, execute
+from project_tool.cli.common import ExpectedRev, console, execute
 from project_tool.cli.render import render_goal_list
 
 goal_app = typer.Typer(help="Goal management", no_args_is_help=True)
@@ -69,6 +69,9 @@ def goal_edit(
     description: Annotated[str | None, typer.Option("--description", "-d")] = None,
     criterion: Annotated[list[str] | None, typer.Option("--criterion")] = None,
     due: Annotated[str | None, typer.Option("--due")] = None,
+    parent: Annotated[str | None, typer.Option("--parent", help="Set parent goal")] = None,
+    status: Annotated[str | None, typer.Option("--status")] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Edit a goal."""
     params: dict = {
@@ -76,9 +79,13 @@ def goal_edit(
         "title": title,
         "description": description,
         "success_criteria": criterion,
+        "status": status,
+        "expected_rev": expected_rev,
     }
     if due is not None:
         params["due_at"] = due
+    if parent is not None:
+        params["parent_goal_id"] = parent
     execute(ctx, "goal.update", params, render=lambda r: console.print(f"{r['id']} updated"))
 
 

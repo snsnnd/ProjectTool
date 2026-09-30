@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from project_tool.cli.common import console, execute, sid
+from project_tool.cli.common import ExpectedRev, console, execute, sid
 from project_tool.cli.render import (
     porcelain_tasks,
     render_events,
@@ -88,6 +88,43 @@ def task_list(
     )
 
 
+@task_app.command("edit")
+def task_edit(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    title: Annotated[str | None, typer.Option("--title")] = None,
+    description: Annotated[str | None, typer.Option("--description", "-d")] = None,
+    priority: Annotated[str | None, typer.Option("--priority", "-p")] = None,
+    weight: Annotated[int | None, typer.Option("--weight", "-w")] = None,
+    label: Annotated[list[str] | None, typer.Option("--label", "-l", help="Replace labels")] = None,
+    accept: Annotated[
+        list[str] | None, typer.Option("--accept", help="Replace acceptance criteria")
+    ] = None,
+    due: Annotated[str | None, typer.Option("--due", help="Due datetime (ISO-8601)")] = None,
+    milestone: Annotated[str | None, typer.Option("--milestone", "-m", help="Move milestone")] = None,
+    parent: Annotated[str | None, typer.Option("--parent", help="Set parent task")] = None,
+    expected_rev: ExpectedRev = None,
+) -> None:
+    """Edit a task."""
+    params: dict = {
+        "task_id": task_id,
+        "title": title,
+        "description": description,
+        "priority": priority,
+        "weight": weight,
+        "labels": label,
+        "acceptance_criteria": accept,
+        "expected_rev": expected_rev,
+    }
+    if due is not None:
+        params["due_at"] = due
+    if milestone is not None:
+        params["milestone_id"] = milestone
+    if parent is not None:
+        params["parent_task_id"] = parent
+    execute(ctx, "task.update", params, render=lambda r: console.print(f"{r['id']} updated"))
+
+
 @task_app.command("show")
 def task_show(
     ctx: typer.Context,
@@ -110,9 +147,7 @@ def _set_status(ctx: typer.Context, task_id: str, target: str, expected_rev: str
 def task_ready(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument()],
-    expected_rev: Annotated[
-        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
-    ] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Mark task as ready to start (from inbox, blocked or review)."""
     _set_status(ctx, task_id, "ready", expected_rev=expected_rev)
@@ -122,9 +157,7 @@ def task_ready(
 def task_start(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument()],
-    expected_rev: Annotated[
-        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
-    ] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Mark task as doing."""
     _set_status(ctx, task_id, "doing", expected_rev=expected_rev)
@@ -134,9 +167,7 @@ def task_start(
 def task_block(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument()],
-    expected_rev: Annotated[
-        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
-    ] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Mark task as blocked."""
     _set_status(ctx, task_id, "blocked", expected_rev=expected_rev)
@@ -146,9 +177,7 @@ def task_block(
 def task_review(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument()],
-    expected_rev: Annotated[
-        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
-    ] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Mark task as ready for review."""
     _set_status(ctx, task_id, "review", expected_rev=expected_rev)
@@ -158,9 +187,7 @@ def task_review(
 def task_done(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument()],
-    expected_rev: Annotated[
-        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
-    ] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Mark task as done."""
     _set_status(ctx, task_id, "done", expected_rev=expected_rev)
@@ -170,9 +197,7 @@ def task_done(
 def task_cancel(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument()],
-    expected_rev: Annotated[
-        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
-    ] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Cancel task."""
     _set_status(ctx, task_id, "cancelled", expected_rev=expected_rev)

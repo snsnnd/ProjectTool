@@ -69,9 +69,10 @@ class GoalService:
         due_at=UNSET,
         parent_goal_id=UNSET,
         status=None,
+        expected_rev=None,
     ) -> dict[str, Any]:
         goal = self.ctx.load("goal", goal_id)
-        base = goal.rev
+        base = self.ctx.require_expected_rev("goal", goal, expected_rev)
         fields: list[str] = []
         if title is not None:
             goal.title = optional_title(title)
@@ -99,8 +100,9 @@ class GoalService:
             return goal.model_dump(mode="json")
         return self.ctx.save(goal, base, "goal.updated", {"fields": fields})
 
-    def goal_set_status(self, goal_id, status) -> dict[str, Any]:
+    def goal_set_status(self, goal_id, status, expected_rev=None) -> dict[str, Any]:
         goal = self.ctx.load("goal", goal_id)
+        base = self.ctx.require_expected_rev("goal", goal, expected_rev)
         new_status = enum_value(GoalStatus, status, "status")
         if goal.status == new_status:
             return goal.model_dump(mode="json")
@@ -108,13 +110,17 @@ class GoalService:
         goal.status = new_status
         return self.ctx.save(
             goal,
-            goal.rev,
+            base,
             "goal.status_changed",
             {"from": old.value, "to": new_status.value},
         )
 
-    def goal_archive(self, goal_id) -> dict[str, Any]:
-        return self.ctx.set_lifecycle("goal", goal_id, Lifecycle.ARCHIVED, "object.archived")
+    def goal_archive(self, goal_id, expected_rev=None) -> dict[str, Any]:
+        return self.ctx.set_lifecycle(
+            "goal", goal_id, Lifecycle.ARCHIVED, "object.archived", expected_rev
+        )
 
-    def goal_restore(self, goal_id) -> dict[str, Any]:
-        return self.ctx.set_lifecycle("goal", goal_id, Lifecycle.ACTIVE, "object.restored")
+    def goal_restore(self, goal_id, expected_rev=None) -> dict[str, Any]:
+        return self.ctx.set_lifecycle(
+            "goal", goal_id, Lifecycle.ACTIVE, "object.restored", expected_rev
+        )

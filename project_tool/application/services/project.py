@@ -8,7 +8,7 @@ import project_tool.application.queries as queries
 from project_tool.application.context import ServiceContext
 from project_tool.application.doctor import run_doctor
 from project_tool.domain.enums import ProjectStatus
-from project_tool.domain.errors import InvalidArgument, RevisionConflict
+from project_tool.domain.errors import InvalidArgument
 from project_tool.domain.validation import optional_text, optional_title
 from project_tool.storage import (
     WriteLock,
@@ -77,13 +77,7 @@ class ProjectServiceGroup:
         metadata=None,
     ) -> dict[str, Any]:
         project = self.ctx.opened.project
-        if expected_rev is not None and project.rev != expected_rev:
-            raise RevisionConflict(
-                "project rev mismatch",
-                expected_rev=expected_rev,
-                actual_rev=project.rev,
-                entity_id=project.id,
-            )
+        self.ctx.require_expected_rev("project", project, expected_rev)
         fields: list[str] = []
         if name is not None:
             project.name = optional_title(name, "project name")

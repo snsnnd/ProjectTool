@@ -88,8 +88,10 @@ class UpdateService:
         milestone_id=UNSET,
         blockers=None,
         next_steps=None,
+        expected_rev=None,
     ) -> dict[str, Any]:
         update = self.ctx.load("update", update_id)
+        base = self.ctx.require_expected_rev("update", update, expected_rev)
         fields: list[str] = []
         if summary is not None:
             update.summary = optional_title(summary, "summary")
@@ -113,10 +115,12 @@ class UpdateService:
             fields.append("next_steps")
         if not fields:
             return update.model_dump(mode="json")
-        return self.ctx.save(update, update.rev, "update.updated", {"fields": fields})
+        return self.ctx.save(update, base, "update.updated", {"fields": fields})
 
-    def update_archive(self, update_id) -> dict[str, Any]:
-        return self.ctx.set_lifecycle("update", update_id, Lifecycle.ARCHIVED, "object.archived")
+    def update_archive(self, update_id, expected_rev=None) -> dict[str, Any]:
+        return self.ctx.set_lifecycle(
+            "update", update_id, Lifecycle.ARCHIVED, "object.archived", expected_rev
+        )
 
     def update_history(self, update_id) -> dict[str, Any]:
         return self.ctx.history("update", update_id)

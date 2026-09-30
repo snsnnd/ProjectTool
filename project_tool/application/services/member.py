@@ -91,8 +91,10 @@ class MemberService:
         git_emails=None,
         external_ids=None,
         active=None,
+        expected_rev=None,
     ) -> dict[str, Any]:
         loaded = self.ctx.load("member", self.ctx.member_id(member))
+        base = self.ctx.require_expected_rev("member", loaded, expected_rev)
         fields: list[str] = []
         if display_name is not None:
             loaded.display_name = optional_title(display_name, "display_name")
@@ -116,21 +118,23 @@ class MemberService:
             fields.append("active")
         if not fields:
             return loaded.model_dump(mode="json")
-        return self.ctx.save(loaded, loaded.rev, "member.updated", {"fields": fields})
+        return self.ctx.save(loaded, base, "member.updated", {"fields": fields})
 
-    def member_deactivate(self, member) -> dict[str, Any]:
+    def member_deactivate(self, member, expected_rev=None) -> dict[str, Any]:
         loaded = self.ctx.load("member", self.ctx.member_id(member))
+        base = self.ctx.require_expected_rev("member", loaded, expected_rev)
         if not loaded.active:
             return loaded.model_dump(mode="json")
         loaded.active = False
-        return self.ctx.save(loaded, loaded.rev, "member.deactivated", {})
+        return self.ctx.save(loaded, base, "member.deactivated", {})
 
-    def member_activate(self, member) -> dict[str, Any]:
+    def member_activate(self, member, expected_rev=None) -> dict[str, Any]:
         loaded = self.ctx.load("member", self.ctx.member_id(member))
+        base = self.ctx.require_expected_rev("member", loaded, expected_rev)
         if loaded.active:
             return loaded.model_dump(mode="json")
         loaded.active = True
-        return self.ctx.save(loaded, loaded.rev, "member.activated", {})
+        return self.ctx.save(loaded, base, "member.activated", {})
 
     def member_workload(self, member) -> dict[str, Any]:
         return queries.member_workload(self.ctx, self.ctx.member_id(member))
@@ -146,10 +150,13 @@ class MemberService:
         self.ctx.actor_id = member_id
         return {"actor": member_id, "handle": record.get("handle") if record else None}
 
-    def member_map_git_identity(self, member, name=None, email=None) -> dict[str, Any]:
+    def member_map_git_identity(
+        self, member, name=None, email=None, expected_rev=None
+    ) -> dict[str, Any]:
         loaded = self.ctx.load("member", self.ctx.member_id(member))
+        base = self.ctx.require_expected_rev("member", loaded, expected_rev)
         if name and str(name) not in loaded.git.names:
             loaded.git.names.append(str(name))
         if email and str(email) not in loaded.git.emails:
             loaded.git.emails.append(str(email))
-        return self.ctx.save(loaded, loaded.rev, "member.updated", {"fields": ["git"]})
+        return self.ctx.save(loaded, base, "member.updated", {"fields": ["git"]})

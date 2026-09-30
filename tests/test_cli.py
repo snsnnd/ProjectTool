@@ -117,3 +117,87 @@ def test_cli_decision_add_with_title_option(tmp_path):
     assert decision["title"] == "Use local-first"
     result = invoke(["-C", str(tmp_path), "decision", "add", "Positional title"])
     assert result.exit_code == 0, result.output
+
+
+def test_cli_task_edit_with_expected_rev(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    result = invoke(["--json", "-C", str(tmp_path), "task", "add", "T1"])
+    task = json.loads(result.output)["result"]
+    rev = task["rev"]
+
+    stale = "sha256:" + "0" * 64
+    result = invoke(
+        ["--json", "-C", str(tmp_path), "task", "edit", task["id"], "--title", "T1b",
+         "--expected-rev", stale]
+    )
+    assert result.exit_code == 5
+    assert json.loads(result.output)["error"]["code"] == "REVISION_CONFLICT"
+
+    result = invoke(
+        ["--json", "-C", str(tmp_path), "task", "edit", task["id"], "--title", "T1b",
+         "--weight", "3", "--label", "x", "--expected-rev", rev]
+    )
+    assert result.exit_code == 0, result.output
+    updated = json.loads(result.output)["result"]
+    assert updated["title"] == "T1b"
+    assert updated["weight"] == 3
+    assert updated["labels"] == ["x"]
+
+
+def test_cli_edit_commands_expose_expected_rev(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+
+    def add_id(args):
+        result = invoke(["--json", "-C", str(tmp_path), *args])
+        assert result.exit_code == 0, result.output
+        return json.loads(result.output)["result"]["id"]
+
+    goal_id = add_id(["goal", "add", "G1"])
+    milestone_id = add_id(["milestone", "add", "M1"])
+    decision_id = add_id(["decision", "add", "D1"])
+    invoke(["-C", str(tmp_path), "member", "add", "alice", "--name", "Alice"])
+    invoke(["-C", str(tmp_path), "link", "add", "fw", "../firmware"])
+
+    stale = ["--expected-rev", "sha256:" + "0" * 64]
+    for args in (
+        ["goal", "edit", goal_id, "--title", "G2"],
+        ["milestone", "edit", milestone_id, "--title", "M2"],
+        ["member", "edit", "alice", "--name", "A2"],
+        ["decision", "edit", decision_id, "--title", "D2"],
+        ["link", "edit", "fw", "--mode", "aggregate"],
+    ):
+        result = invoke(["--json", "-C", str(tmp_path), *args, *stale])
+        assert result.exit_code == 5, f"{args}: {result.output}"
+        assert json.loads(result.output)["error"]["code"] == "REVISION_CONFLICT", args
+
+
+def test_cli_decision_and_link_edit_happy_path(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    result = invoke(["--json", "-C", str(tmp_path), "decision", "add", "D1"])
+    decision = json.loads(result.output)["result"]
+    result = invoke(
+        ["--json", "-C", str(tmp_path), "decision", "edit", decision["id"],
+         "--rationale", "simpler", "--expected-rev", decision["rev"]]
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["result"]["rationale"] == "simpler"
+
+    result = invoke(["--json", "-C", str(tmp_path), "link", "add", "fw", "../firmware"])
+    link = json.loads(result.output)["result"]
+    result = invoke(
+        ["--json", "-C", str(tmp_path), "link", "edit", "fw", "--enable",
+         "--expected-rev", link["rev"]]
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["result"]["enabled"] is True
+
+
+def test_cli_milestone_show_exposes_rev(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    result = invoke(["--json", "-C", str(tmp_path), "milestone", "add", "M1"])
+    milestone = json.loads(result.output)["result"]
+    result = invoke(["--json", "-C", str(tmp_path), "milestone", "show", milestone["id"]])
+    assert result.exit_code == 0, result.output
+    view = json.loads(result.output)["result"]
+    assert view["rev"] == milestone["rev"]
+    assert view["version"] == 1

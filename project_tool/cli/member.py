@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from project_tool.cli.common import console, execute
+from project_tool.cli.common import ExpectedRev, console, execute
 from project_tool.cli.render import render_events, render_member_list, render_member_workload
 
 member_app = typer.Typer(help="Member management", no_args_is_help=True)
@@ -70,6 +70,7 @@ def member_edit(
     role: Annotated[list[str] | None, typer.Option("--role")] = None,
     git_name: Annotated[list[str] | None, typer.Option("--git-name")] = None,
     git_email: Annotated[list[str] | None, typer.Option("--git-email")] = None,
+    expected_rev: ExpectedRev = None,
 ) -> None:
     """Edit a member."""
     execute(
@@ -81,6 +82,7 @@ def member_edit(
             "roles": role,
             "git_names": git_name,
             "git_emails": git_email,
+            "expected_rev": expected_rev,
         },
         render=lambda r: console.print(f"{r['handle']} updated"),
     )

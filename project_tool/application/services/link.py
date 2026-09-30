@@ -77,8 +77,10 @@ class LinkService:
         mode=None,
         enabled=None,
         project_id=UNSET,
+        expected_rev=None,
     ) -> dict[str, Any]:
         link = self._link(name)
+        base = self.ctx.require_expected_rev("link", link, expected_rev)
         fields: list[str] = []
         if locator is not UNSET:
             self._validate_locator(link.target.kind, locator)
@@ -99,14 +101,15 @@ class LinkService:
             fields.append("target.project_id")
         if not fields:
             return link.model_dump(mode="json")
-        return self.ctx.save(link, link.rev, "link.updated", {"fields": fields})
+        return self.ctx.save(link, base, "link.updated", {"fields": fields})
 
-    def link_remove(self, name) -> dict[str, Any]:
+    def link_remove(self, name, expected_rev=None) -> dict[str, Any]:
         link = self._link(name)
+        base = self.ctx.require_expected_rev("link", link, expected_rev)
         if link.lifecycle == Lifecycle.DELETED:
             return link.model_dump(mode="json")
         link.lifecycle = Lifecycle.DELETED
-        return self.ctx.save(link, link.rev, "link.removed", {})
+        return self.ctx.save(link, base, "link.removed", {})
 
     def link_resolve(self, name) -> dict[str, Any]:
         link = self._link(name)

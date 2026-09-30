@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Annotated, Any, NoReturn
 
 import typer
 from rich.console import Console
@@ -23,6 +23,12 @@ from project_tool.domain.timeutil import format_time
 
 console = Console()
 err_console = Console(stderr=True)
+
+# 统一并发门：与 Service 的 expected_rev contract 一一对应（docs/09-v1a-design.md §4.5）。
+ExpectedRev = Annotated[
+    str | None,
+    typer.Option("--expected-rev", help="Fail with REVISION_CONFLICT if the object rev differs"),
+]
 
 
 class CliState:
