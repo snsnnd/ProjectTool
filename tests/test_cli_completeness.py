@@ -404,16 +404,18 @@ def test_ellipsis_helper_is_importable_from_render():
 # ------------------------------------------- link 的机器本地路径（V1-B.2 补完的半截功能）
 
 
-def _absolute_locator_link_error(root) -> str:
-    bad = invoke(["-C", str(root), "link", "add", "sib", "/abs/elsewhere", "--kind", "local_project"])
+def _absolute_locator_link_error(root, absolute: str) -> str:
+    """absolute 必须由 tmp_path 派生：POSIX 的 /abs/x 在 Windows 上并不算绝对路径
+    （PureWindowsPath('/abs/x').is_absolute() 是 False），写死会只在 Windows 上炸。"""
+    bad = invoke(["-C", str(root), "link", "add", "sib", absolute, "--kind", "local_project"])
     assert bad.exit_code != 0
     assert "INVALID_ARGUMENT" in bad.output
     return bad.output
 
 
-def test_link_add_absolute_locator_error_names_both_ways_out(root):
+def test_link_add_absolute_locator_error_names_both_ways_out(root, tmp_path):
     """原来只说「去 local.toml 映射」，但当时根本没有 CLI 能映射——误导。"""
-    output = _absolute_locator_link_error(root)
+    output = _absolute_locator_link_error(root, str(tmp_path / "elsewhere"))
     assert "relative" in output
     assert "map-local" in output
 
