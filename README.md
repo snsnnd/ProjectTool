@@ -20,7 +20,7 @@ my-project/
 └── README.md
 ```
 
-## 状态（V0）
+## 状态（V0.1）
 
 | 能力 | 状态 |
 |---|---|
@@ -34,6 +34,7 @@ my-project/
 | 显式 method registry + `system.capabilities` | ✅ |
 | CLI：init / status / doctor [--repair] / migrate / goal / milestone / task / member / update / decision / link / log / graph | ✅ |
 | ruff + mypy + CI | ✅ |
+| 真实项目 dogfooding（EFW Studio，零污染） | ✅（[报告](dogfooding/report.md)） |
 | Artifact / Git Adapter / Search / SQLite 索引 / Local Web UI | V1 |
 | Remote Server / Sync / Accounts / Webhook / SDK | V2 |
 | KC 集成 | V3 |
@@ -48,6 +49,8 @@ my-project/
 - [06-roadmap.md](docs/06-roadmap.md) — 路线图与验收标准
 - [07-v0.1-audit.md](docs/07-v0.1-audit.md) — V0.1 架构审计与硬化
 - [08-events.md](docs/08-events.md) — Event contract
+- [09-handover.md](docs/09-handover.md) — 交接文档（状态 / 约定 / V1 第一步）
+- [AGENTS.md](AGENTS.md) — 给接手 agent 的速查与禁区
 
 ## 快速开始
 

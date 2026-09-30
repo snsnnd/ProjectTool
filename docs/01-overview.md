@@ -113,4 +113,7 @@ Remote Collaboration 模式（V2）
 | [03-data-model.md](03-data-model.md) | ID、Header、各对象 schema、状态机 |
 | [04-storage.md](04-storage.md) | `.pjt` 布局、rev、事务、锁、恢复 |
 | [05-interfaces.md](05-interfaces.md) | Service API、错误码、CLI 规范 |
-| [06-roadmap.md](06-roadmap.md) | V0–V3 路线图与 V0 验收标准 |
+| [06-roadmap.md](06-roadmap.md) | V0–V3 路线图与验收标准 |
+| [07-v0.1-audit.md](07-v0.1-audit.md) | V0.1 审计发现与处理结果 |
+| [08-events.md](08-events.md) | Event contract |
+| [09-handover.md](09-handover.md) | 交接文档（状态 / 约定 / V1 第一步）|
