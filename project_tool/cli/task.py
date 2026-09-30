@@ -97,43 +97,85 @@ def task_show(
     execute(ctx, "task.get", {"task_id": task_id}, render=render_task_show)
 
 
-def _set_status(ctx: typer.Context, task_id: str, target: str) -> None:
+def _set_status(ctx: typer.Context, task_id: str, target: str, expected_rev: str | None = None) -> None:
     execute(
         ctx,
         "task.set_status",
-        {"task_id": task_id, "status": target},
+        {"task_id": task_id, "status": target, "expected_rev": expected_rev},
         render=lambda result: console.print(f"{result['id']} -> [bold]{result['status']}[/bold]"),
     )
 
 
+@task_app.command("ready")
+def task_ready(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    expected_rev: Annotated[
+        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
+    ] = None,
+) -> None:
+    """Mark task as ready to start (from inbox, blocked or review)."""
+    _set_status(ctx, task_id, "ready", expected_rev=expected_rev)
+
+
 @task_app.command("start")
-def task_start(ctx: typer.Context, task_id: Annotated[str, typer.Argument()]) -> None:
+def task_start(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    expected_rev: Annotated[
+        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
+    ] = None,
+) -> None:
     """Mark task as doing."""
-    _set_status(ctx, task_id, "doing")
+    _set_status(ctx, task_id, "doing", expected_rev=expected_rev)
 
 
 @task_app.command("block")
-def task_block(ctx: typer.Context, task_id: Annotated[str, typer.Argument()]) -> None:
+def task_block(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    expected_rev: Annotated[
+        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
+    ] = None,
+) -> None:
     """Mark task as blocked."""
-    _set_status(ctx, task_id, "blocked")
+    _set_status(ctx, task_id, "blocked", expected_rev=expected_rev)
 
 
 @task_app.command("review")
-def task_review(ctx: typer.Context, task_id: Annotated[str, typer.Argument()]) -> None:
+def task_review(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    expected_rev: Annotated[
+        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
+    ] = None,
+) -> None:
     """Mark task as ready for review."""
-    _set_status(ctx, task_id, "review")
+    _set_status(ctx, task_id, "review", expected_rev=expected_rev)
 
 
 @task_app.command("done")
-def task_done(ctx: typer.Context, task_id: Annotated[str, typer.Argument()]) -> None:
+def task_done(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    expected_rev: Annotated[
+        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
+    ] = None,
+) -> None:
     """Mark task as done."""
-    _set_status(ctx, task_id, "done")
+    _set_status(ctx, task_id, "done", expected_rev=expected_rev)
 
 
 @task_app.command("cancel")
-def task_cancel(ctx: typer.Context, task_id: Annotated[str, typer.Argument()]) -> None:
+def task_cancel(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    expected_rev: Annotated[
+        str | None, typer.Option("--expected-rev", help="Fail if the task rev differs")
+    ] = None,
+) -> None:
     """Cancel task."""
-    _set_status(ctx, task_id, "cancelled")
+    _set_status(ctx, task_id, "cancelled", expected_rev=expected_rev)
 
 
 @task_app.command("assign")

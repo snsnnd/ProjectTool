@@ -24,6 +24,49 @@
 milestone 的 `progress` 因此恒为 0%（final-snapshot 里 active milestone `0%`）——
 因为没有一个阶段是真正按时间交付的。这是 Area 要解决的第一性问题，不是理论设计。
 
+### 1.1 任务 1：`task ready` 的状态规则决定
+
+**先查当前 `task.set_status` 的规则，结论是：没有任何状态转换矩阵。**
+`application/services/task.py:task_set_status` 只做 `enum_value(TaskStatus, status)`
+然后赋值，任意状态可到任意状态。CLI 上 `task start` / `block` / `review` / `done` /
+`cancel` 五个快捷命令共享同一个 `_set_status` 薄适配。
+
+所以本轮的决定是：
+
+```text
+pjt task ready <task>  ==  pjt task start 等价物：只调 task.set_status{status: "ready"}
+```
+
+| 转换 | 是否允许 | 理由 |
+|---|---|---|
+| `inbox → ready` | ✓ | 目标场景 |
+| `blocked → ready` | ✓ | 阻塞解除后重新可开始 |
+| `review → ready` | ✓ | 被打回，回到可开始 |
+| `done → ready` | ✓ | 同上：无转换矩阵 |
+| `cancelled → ready` | ✓ | 同上 |
+
+**不为 `ready` 单独引入转换矩阵**，理由：
+
+1. 「done → ready」「cancelled → ready」是否允许，在没有转换矩阵的服务里本来就是
+   允许的。只给 `ready` 加白名单，等于凭空发明一条与其它 6 个状态不同的规则——
+   这正是本轮要消灭的「某些领域语义不同」。
+2. 真正的转换矩阵是**跨状态的策略决定**（是否允许 review → doing、done → doing），
+   应该一次性对全部状态统一决定，而不是为补一个缺失命令顺带发明。
+3. CLI 保持薄适配层：业务规则只在 `task.set_status` 一处。
+
+`blocked` 状态与 computed blocked 的区分不受影响（见下）。
+
+### 1.2 computed blocked 仍然只推导
+
+```text
+Task.status = ready，dependencies 未完成
+  → computed_blocked = true（读视图字段）
+  → Task.status 仍然是 ready，不被改写
+```
+
+`task ready` 不引入任何自动状态转换；`is_computed_blocked` 是纯函数，
+`graph/dependency.py` 不写库，status 也不回写。这条约束本轮不变。
+
 ---
 
 ## 2. Area 的设计理由
