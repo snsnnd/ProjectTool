@@ -33,6 +33,7 @@ def build_registry(service) -> dict[str, MethodSpec]:
     decisions = service.decisions
     artifacts = service.artifacts
     links = service.links
+    gits = service.git
     logs = service.logs
     graphs = service.graphs
 
@@ -83,6 +84,9 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec("area.archive", areas.area_archive, True, "area", "archive area"),
         MethodSpec("area.restore", areas.area_restore, True, "area", "restore area"),
         MethodSpec("area.tasks", areas.area_tasks, False, "area", "tasks in an area"),
+        MethodSpec(
+            "area.match_path", areas.area_match_path, False, "area", "areas matching a path"
+        ),
         MethodSpec("area.history", areas.area_history, False, "area", "area event history"),
         # task
         MethodSpec("task.create", tasks.task_create, True, "task", "create task"),
@@ -170,6 +174,13 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec("link.remove", links.link_remove, True, "link", "remove link"),
         MethodSpec("link.resolve", links.link_resolve, False, "link", "resolve link locally"),
         MethodSpec("link.status", links.link_status, False, "link", "link status"),
+        # git（只读感知；link_commit 只写 .pjt，不写仓库）
+        MethodSpec("git.available", gits.git_available, False, "git", "git availability"),
+        MethodSpec("git.status", gits.git_status, False, "git", "changed files + candidate areas"),
+        MethodSpec("git.log", gits.git_log, False, "git", "commit history by task trailer"),
+        MethodSpec(
+            "git.link_commit", gits.git_link_commit, True, "git", "register a commit as an artifact"
+        ),
         # log
         MethodSpec("log.list", logs.log_list, False, "log", "list events"),
         MethodSpec("log.get", logs.log_get, False, "log", "read event"),

@@ -22,7 +22,7 @@ from project_tool.version import SCHEMA_VERSION
 CAPABILITIES_FEATURES = {
     "area": True,
     "artifact": True,
-    "git": False,
+    "git": True,
     "search": False,
     "web": False,
     "remote": False,

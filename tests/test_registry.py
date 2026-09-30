@@ -19,6 +19,10 @@ def test_capabilities_exposes_methods_and_features(service):
         "artifact.create",
         "artifact.verify",
         "task.related_artifacts",
+        "git.available",
+        "git.status",
+        "git.log",
+        "git.link_commit",
         "task.create",
         "task.move_area",
         "task.set_status",
@@ -35,18 +39,20 @@ def test_capabilities_exposes_methods_and_features(service):
         "remote",
         "sync",
     }
-    # V1-A 打开 area；V1-B 之后的层保持 false。
+    # 已落地：area / artifact / git（只读感知）
     assert caps["features"]["area"] is True
     assert caps["features"]["artifact"] is True
+    assert caps["features"]["git"] is True
+    # 明确不做 / 未做：serverless 决定砍掉 remote 与 sync
     assert not any(
-        caps["features"][name] for name in ("git", "search", "web", "remote", "sync")
+        caps["features"][name] for name in ("search", "web", "remote", "sync")
     )
 
 
 def test_registry_covers_every_declared_domain(service):
     categories = {spec.category for spec in service.registry.values()}
     assert {"system", "project", "area", "artifact", "task", "milestone", "goal",
-            "member", "update", "decision", "link", "log", "graph"} <= categories
+            "member", "update", "decision", "link", "git", "log", "graph"} <= categories
 
 
 def test_registry_specs_have_metadata(service):

@@ -17,19 +17,21 @@ Git tracks code. Project Tool tracks the project.
 
 | 项 | 值 |
 |---|---|
-| 版本 | `0.2.1`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
-| 关键提交 | `6a19628` V0 核心+CLI → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` 统一 expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening |
-| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **271 passed** · CI（Ubuntu+Windows, Py3.12） |
+| 版本 | `0.3.0`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
+| 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 |
+| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **336 passed** · CI（Ubuntu+Windows, Py3.12） |
 | 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（Area 映射、Artifact 关联、零污染树哈希） |
-| Service API | 显式 registry，**103 个 method**，`system.capabilities` 可发现（`area=true, artifact=true`） |
-| 未实现 | Git Adapter / Search / SQLite 索引 / Web / Remote / Sync / KC / Artifact 内容快照（V1-B+） |
+| Service API | 显式 registry，**108 个 method**，`system.capabilities` 可发现（`area/artifact/git = true`） |
+| 已实现 | **Git 感知（只读）**：`git.available` / `git.status` / `git.log` / `git.link_commit` + `Area.path_patterns` |
+| 未实现 | Search / SQLite 索引 / Web / Artifact 内容快照 / 多人 merge 辅助 |
+| 已砍掉 | Remote / Sync / Accounts / Webhook / KC（见 `docs/06` §V2：协作走 Git，不自建服务器） |
 
 ## 2. 新接手者 15 分钟上手
 
 ```bash
 cd /path/to/ProjectTool
 uv sync
-uv run pytest                          # 271 passed
+uv run pytest                          # 336 passed
 uv run ruff check . && uv run mypy project_tool
 
 # 在临时目录体验完整流程（不要污染别人的真实项目）
@@ -60,7 +62,7 @@ ProjectTool/
 │   ├── graph/           # 依赖/层级/进度推导
 │   ├── integrations/    # filesystem（原子写、fsync）
 │   └── cli/             # Typer：main/common/render + 各域模块
-├── tests/               # 20 个测试文件，271 cases
+├── tests/               # 21 个测试文件，336 cases
 ├── docs/                # 01–09（09-handover = 本文件，09-v1a-design = 本轮设计记录）
 ├── dogfooding/          # EFW 真实项目验证报告 + 证据 + 可复现脚本
 ├── pyproject.toml       # uv；dev 依赖 pytest/ruff/mypy；ruff+mypy 配置
@@ -191,6 +193,7 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
 | `test_area.py` | Area CRUD、Task 归属与过滤、层级环、doctor、事件、迁移兼容 |
 | `test_artifact.py` | locator 安全（含合法空格）、关系、verify（存在/缺失/穿越/绝对路径/URL）、rev、事件、doctor、零写入 |
 | `test_hardening.py` | V1-A.1：版本单一来源、schema 写入门、读路径 rev 校验、篡改不可洗白、doctor 韧性 |
+| `test_git.py` | V1-B：glob 匹配、trailer 解析、`git.available/status/log/link_commit`、**project root != git root**、只读白名单、仓库零写入 |
 
 写测试要求：只用 `tmp_path` + monkeypatch；禁止 sleep/网络/随机碰撞；失败注入用确定性的 monkeypatch（参考 `test_transaction_recovery.py` 的 `crash_on_apply`）。
 
@@ -213,19 +216,18 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
 - `artifact.list` / `task.related_artifacts` 每次都是全量 file scan；15 任务规模无压力，
   上千 artifact 时需要 Search/Index（V1-B）。
 
-**模型层待决（进 Git Adapter 前要先定）**
+**模型层待决 / 已决**
 
-- **Task 单 Area** 是硬限制。EFW 15 个任务里 2 个（T5 引用检查、T12 ProcTransport 泄漏）
+- ✅ **Area ↔ 目录绑定已决定并实现**：`Area.path_patterns`（**可选** glob 列表）。
+  空列表 = 纯语义 Area，行为与 V1-A 完全一致。选 glob 列表而不是单个 `path`，
+  因为一个 Area 常对应不连续的多个路径（`desktop/**` + `scripts/**` + `package.json`）。
+  硬约束：**Git Adapter 只推导候选 Area，绝不回写 `Task.area_id`**。
+  详见 `docs/03` §4.7b。
+- ⬜ **Task 单 Area** 是硬限制。EFW 15 个任务里 2 个（T5 引用检查、T12 ProcTransport 泄漏）
   跨域，V1-A 强制取主 Area，跨域信息只能进 description/label。
   如果「主 Area 说不清」的比例上升，应升到多 Area，而不是硬塞。
-- **Area 名不唯一**。同 goal/milestone/task 的 title 一致；按名引用不唯一时报
-  `INVALID_ARGUMENT` 要求用 ID 消歧。真实使用时「UI 只有一个」是自然约束，
-  但没有强制。
-- **Area ↔ 目录没有绑定**。目前靠人维护 `Area=UI ↔ ui/`。
-  Git Adapter 落地时最自然的做法是让 `area` 记住**目录前缀**（相对 project root），
-  这样 `task list --area UI` 能直接推出候选 Artifact 路径。
-  **但这会把目录结构写进 canonical 数据，重命名目录就会留下悬挂引用**——
-  V1-B 必须先决定：硬编码前缀 / 可选前缀 / 保持纯语义不做绑定。
+- ⬜ **Area 名不唯一**。同 goal/milestone/task 的 title 一致；按名引用不唯一时报
+  `INVALID_ARGUMENT` 并列出候选 ID。真实使用时「UI 只有一个」是自然约束，但没有强制。
 
 **技术债**
 
@@ -238,47 +240,30 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
   `expected_rev` 可用，字段补齐留给 Web（V1-B）；
 - mypy 为“合理范围”而非 `--strict`，新增代码不得扩大豁免。
 
-## 9. 下一步：V1-B（Git Adapter）
+## 9. 路线图现状
 
-V1-A 已完成 Artifact，因此下一个自然落点是 **Git Adapter（只读）**。
+V0 → V0.1 → V1-A → V1-A.1 → **V1-B（Git 感知层）全部完成**。
 
-1. **先定 Area ↔ 目录的关系**（见 §8「模型层待决」）。这是 Git Adapter 的前置条件：
-   Area 不和目录绑定，`task list --area UI` 就无法自动推出该看哪些文件。
+| 项 | 状态 |
+|---|---|
+| Area ↔ 目录（`path_patterns`，可选） | ✅ |
+| `integrations/git.py` 只读适配器（运行时子命令白名单） | ✅ |
+| `git.available` / `git.status` / `git.log` / `git.link_commit` | ✅ |
+| trailer 约定 `PJT-Task: TSK-…` | ✅ |
+| `git_commit` Artifact 的 locator 真正解析（`rev-parse --verify`） | ✅ |
+| project root != git root | ✅（EFW 真实场景验证） |
+| 仓库零写入 | ✅（`tests/test_git.py` + 树 sha256 + HEAD/reflog 比对） |
 
-   **不要用单个 `path = ui/`**——真实映射是多对多的：
+**剩下的（未排期，按需要挑）**
 
-   ```text
-   Distribution
-   ├── desktop/**
-   ├── scripts/**
-   ├── package.json
-   └── electron-builder config
-   ```
-
-   更合理的形状是 **glob 列表**（`path_patterns: ["desktop/**", "scripts/**", "package.json"]`），
-   这样「一个 Area 跨多个不连续路径」和「一个 glob 命中多个 Area」都能表达。
-   代价是把目录结构写进 canonical 数据：重命名目录会留下悬挂引用。
-   三个选项要一起决定：**硬绑定 / 可选绑定（无绑定时退回人工） / 保持纯语义不做绑定**。
-
-   无论选哪个，Git Adapter 只允许 **推导**：
-
-   ```text
-   changed file  ->  候选 Area（报告 / 建议 / 生成命令）
-   绝不  ->  自动改写 Task.area_id
-   ```
-
-   否则一个跨 Area 的 commit 会被错误归类，而 Area 是**人工维护的结构判断**，
-   不是可以从文件路径机械推导出来的东西。
-2. **Git Adapter（只读）**
-   - `integrations/git.py`：`detect/status/scan_commits`（trailer `PJT-Task: TSK-…`）；
-   - 产出 Artifact：`kind=git_commit` / `git_branch` 的 locator 从「格式校验」升级为
-     「真实可解析」（`git rev-parse --verify`）；
-   - `git.link_commit` 产生 `git.commit_linked` 事件（docs/08 预留）；
-   - 注意：**Project root != Git root 必须支持**（EFW 场景已验证），只按 path 向上找 `.git`，
-     不得假设相等。`artifact.kind=git_*` 的 verify 也要按 Git root 解析，不是 project root。
-3. **Search + SQLite**：`.pjt/local/index.sqlite` 只读缓存 + `pjt index rebuild`；
-   索引失败不得影响 canonical。顺带解决 §8 里「artifact 全量 file scan」的问题。
-4. **Web**：先 `system.capabilities` → FastAPI 薄封装（REST 映射见 docs/05 §7）→ React。
+1. **多人 Git merge 辅助** — 这是「无 remote」这个决定的**唯一实质代价**。
+   2 个并发写者 merge `.pjt` 冲突时，`doctor` 会报 `PROJECT_CORRUPTED`（正确但需人工解）。
+   值得做的最小版本：`pjt doctor --resolve-merge` 之类的辅助，只读分析 + 给建议，不自动改。
+   **不要**为了这个去做同步服务器。
+2. **Search / SQLite 索引** — 解决 §8 里「artifact 全量 file scan」和
+   「上百任务时 list 变慢」。只读缓存，可重建，失败不得影响 canonical。
+3. **本地 Web** — `system.capabilities` 已有；FastAPI 薄封装（REST 映射见 docs/05 §7）→ React。
+   注意：**只做本地**，不做远程服务。
 
 ## 10. 排障手册
 
@@ -313,6 +298,8 @@ V1-A 已完成 Artifact，因此下一个自然落点是 **Git Adapter（只读�
   **没有自动改写任何 milestone 或 task**。是否迁移真实数据是维护者的决定。
 - **framework 仓库禁止任何 git 写操作**（add/commit/push/reset/checkout/restore/clean）；
   EFW 源码禁止修改；唯一允许的写入是 `new/efw/.pjt/**`（以及 `.gitignore` 的那两行 ignore）。
+- V1-B 回归：`python3 dogfooding/scripts/v1b_dogfood.py`；
+  输出 `dogfooding/v1b-evidence/`，污染核对 `dogfooding/v1b-evidence/00-efw-pollution-check.txt`。
 - 可复现脚本（只在 `.pjt` 副本上跑破坏性测试）：
   `dogfooding/scripts/seed_efw.sh`、`destructive_checks.py`、`format_result.py`；
   证据在 `dogfooding/evidence/`，结论在 `dogfooding/report.md`。

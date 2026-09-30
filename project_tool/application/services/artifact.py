@@ -23,6 +23,7 @@ from project_tool.domain.validation import optional_text, require_title
 class ArtifactService:
     def __init__(self, ctx: ServiceContext):
         self.ctx = ctx
+        self.gits: Any = None  # 由 ProjectService 组装时注入（避免循环依赖）
 
     # ----------------------------------------------------------------- 创建
 
@@ -249,6 +250,17 @@ class ArtifactService:
 
     def _verify_one(self, record: dict[str, Any]) -> dict[str, Any]:
         kind = ArtifactKind(record["kind"])
+        # git kind 由 Git Adapter 真正解析（V1-B 之前这里只校验格式）
+        if self.gits is not None:
+            delegated = self.gits.verify_locator(kind.value, record["locator"])
+            if delegated is not None:
+                return {
+                    "id": record["id"],
+                    "name": record["name"],
+                    "kind": record["kind"],
+                    "locator": record["locator"],
+                    **delegated,
+                }
         try:
             result = verify_locator(kind, record["locator"], self.ctx.paths.root)
         except InvalidArgument as exc:

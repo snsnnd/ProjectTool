@@ -3,7 +3,7 @@
 > Git tracks code. Project Tool tracks the project.
 > Git 记录代码的演化，Project Tool 记录项目的演化。
 
-Project Tool 是一个 **local-first** 的工程项目状态与协作系统。
+Project Tool 是一个 **local-first、Git-aware** 的工程项目状态与协作系统。
 它不替代 Git、Jira、Notion，而是记录 Git 不记录的东西：
 
 ```text
@@ -60,8 +60,9 @@ my-project/
 | CLI：init / status / doctor [--repair] / migrate / log / graph + 9 个域子命令 | ✅ |
 | 真实项目二次 dogfooding（EFW Studio，两轮，零源码污染） | ✅（[V0.1](dogfooding/report.md) · [V1-A](dogfooding/v1a-report.md)） |
 | ruff + mypy + 271 tests + CI（Ubuntu + Windows, Py3.12） | ✅ |
-| Git Adapter（`git status` / commit 关联 / `git_commit` artifact） | ⏳ V1-B |
-| Search / 全文检索 | ⏳ V1-B |
+| **Git 感知（只读）**：`git status` / `git log` / commit → `git_commit` Artifact | ✅（V1-B） |
+| Area ↔ 目录绑定（`path_patterns`，可选） | ✅（V1-B） |
+| Search / 全文检索 | ⏳ 未排期 |
 | Remote / Sync / Accounts / Webhook / Web UI | ❌ **不做**（见上方边界） |
 
 设计文档见 [docs/](docs/)：
@@ -124,6 +125,12 @@ pjt artifact add file studio_core/debug.py \
   --name "Debug transport" --task TSK-xxx
 pjt artifact verify
 
+# 提交时带上 trailer，工具就能把 commit 关联回任务
+#   git commit -m "fix loopback" -m "PJT-Task: TSK-xxx"
+pjt git status                      # 改动的工程文件 + 候选 Area + 引用它的 Artifact
+pjt git log --task TSK-xxx          # 这个任务关联过哪些 commit
+pjt git link-commit HEAD            # 登记成 git_commit Artifact（只写 .pjt）
+
 pjt status && pjt log --since 7d && pjt graph project && pjt doctor
 ```
 
@@ -142,7 +149,7 @@ Project
 │     ├── labels            自由标签（bug / test / hardware）
 │     ├── related_updates   进展记录
 │     └── related_artifacts 产物引用（反向派生读）
-├── Decision ── artifacts    为什么这么定 + 支撑它的文件
+├── Decision ── artifacts    为什么这么定 + 支撑它的文件（源码 / 文档 / commit）
 ├── Artifact                 ART-，kind + locator（纯引用，不存内容）
 ├── Member / Update / Link
 └── Event History            append-only，base_rev → new_rev 链
@@ -163,11 +170,12 @@ pjt doctor [--repair]           完整性检查（损坏时 exit 9）
 pjt migrate                     schema 升级（老项目必跑一次）
 pjt log [--task TSK-x] [--member jichao] [--since 7d] [--type task.status_changed]
 pjt graph [project|tasks|milestone MLS-x|projects]
+pjt git    status|log|link-commit                      # 只读感知，不写 Git 仓库
 
 pjt task   add|list|show|edit|ready|start|block|review|done|cancel
            |assign|unassign|depend|undepend|label|unlabel
            |move|move-area|artifacts|related-updates|archive|restore|delete|history
-pjt area   add|list|show|tree|edit|archive|restore
+pjt area   add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history
 pjt goal     add|list|show|edit|achieve|drop
 pjt milestone add|list|show|edit|activate|close|cancel|progress

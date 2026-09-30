@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from project_tool.application.context import UNSET, ServiceContext
 from project_tool.domain.area import Area
+from project_tool.domain.area_paths import match_any, normalize_path_patterns
 from project_tool.domain.enums import Lifecycle
 from project_tool.domain.errors import InvalidArgument
 from project_tool.domain.ids import new_id
@@ -31,6 +32,7 @@ class AreaService:
         name,
         description="",
         parent_area_id=None,
+        path_patterns=None,
         expected_rev=None,
     ) -> dict[str, Any]:
         # expected_rev 在创建路径上无意义（对象还不存在），显式拒绝而不是静默忽略。
@@ -45,6 +47,7 @@ class AreaService:
             name=name_text,
             description=optional_text(description, "description"),
             parent_area_id=parent,
+            path_patterns=normalize_path_patterns(path_patterns),
             created_at=now,
             updated_at=now,
         )
@@ -87,6 +90,7 @@ class AreaService:
         name=None,
         description=None,
         parent_area_id=UNSET,
+        path_patterns=UNSET,
         expected_rev=None,
     ) -> dict[str, Any]:
         area = self.ctx.load("area", self.ctx.require_area_id(area_id))
@@ -105,6 +109,9 @@ class AreaService:
             self.ctx.validate_area_parent_chain(area.id, new_parent)
             area.parent_area_id = new_parent
             fields.append("parent_area_id")
+        if path_patterns is not UNSET:
+            area.path_patterns = normalize_path_patterns(path_patterns)
+            fields.append("path_patterns")
         if not fields:
             return project_graph.area_summary(area, self.ctx.tasks_by_id())
         self.ctx.save(area, base, "area.updated", {"fields": fields})
@@ -128,6 +135,26 @@ class AreaService:
             {"fields": ["parent_area_id"], "from": old, "to": new_parent},
         )
         return project_graph.area_summary(area, self.ctx.tasks_by_id())
+
+    def area_match_path(self, path) -> list[dict[str, Any]]:
+        """哪些 Area 的 `path_patterns` 命中这个 project-relative 路径。
+
+        只读推导（Git Adapter 用）：**不修改任何 Area，也不回写 `Task.area_id`**。
+        没填 `path_patterns` 的 Area 永远不参与匹配。
+        """
+        normalized = str(path or "").replace("\\", "/").strip()
+        if not normalized:
+            raise InvalidArgument("path must not be empty")
+        hits = []
+        for model in self.ctx.store.list_models("area"):
+            area = cast(Area, model)
+            if area.lifecycle != Lifecycle.ACTIVE or not area.path_patterns:
+                continue
+            if match_any(area.path_patterns, normalized):
+                hits.append(
+                    {"id": area.id, "name": area.name, "patterns": list(area.path_patterns)}
+                )
+        return hits
 
     # ------------------------------------------------------------- 生命周期
 

@@ -37,7 +37,7 @@ system.capabilities
   "features": {
     "area": true,
     "artifact": false,
-    "git": false,
+    "git": true,
     "search": false,
     "web": false,
     "remote": false,
@@ -85,6 +85,29 @@ pjt artifact verify [ART-…]                          # 省略 = 全部
 pjt task artifacts TSK-…
 ```
 
+### git（V1-B，只读感知）
+
+| Method | 作用 | 备注 |
+|---|---|---|
+| `git.available` | `{available, work_tree, project_subdir, project_root_is_git_root}` | 不可用是**状态**不是异常 |
+| `git.status` | `{available, files[{path, status, candidate_areas[], referenced_by_artifacts[]}], pjt_changed, unbound_areas[]}` | 只推导 Area，不回写；`.pjt/**` 默认折叠成一行摘要 |
+| `git.log` | `{available, commits[{sha, short_sha, author, subject, linked_task_ids[]}]}` | trailer = `PJT-Task: TSK-…` |
+| `git.link_commit` | `{artifact, created, commit}` | **唯一 mutation，且只写 `.pjt`**，不碰仓库；同 commit 幂等 |
+
+**只读不变量写在代码里**：`integrations/git.py` 的 `GitRepo.run()` 强制
+`args[0] in READ_ONLY_SUBCOMMANDS`（`rev-parse` / `status` / `log` / `show`），
+其余子命令直接 `ValueError`。并且一律加 `--no-optional-locks`，
+不让 `git status` 去抢别人的 `.git/index` 锁。
+
+**不提供**：clone / add / commit / checkout / merge / reset / clean / push / fetch ——
+那些是 Git 的事，不是记录项目状态的工具的事。
+
+```bash
+pjt git status [--area ARA-x] [--no-untracked] [--include-pjt]
+pjt git log [--task TSK-x] [--path ui/store.tsx] [--limit N]
+pjt git link-commit <sha|HEAD> [--task TSK-x]
+```
+
 ### area
 
 ```text
@@ -130,7 +153,10 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
 | `graph.project` `graph.tasks` `graph.dependencies` `graph.links` | 项目图 | ✓ |
 | `search.query` | 全文/结构化搜索 | ○（V1-B） |
 | `artifact.*` | 产物引用 | ✓（V1-A，见下） |
-| `git.*` | Git 集成 | ○（V1-B） |
+| `git.available` | Git 是否可用 + project root 与 git root 的关系 | ✓（V1-B） |
+| `git.status` | 改动的工程文件 + 候选 Area + 引用它的 Artifact | ✓（V1-B） |
+| `git.log` | 提交历史（按 `PJT-Task:` trailer / 路径过滤） | ✓（V1-B） |
+| `git.link_commit` | 把 commit 登记成 `git_commit` Artifact（**只写 `.pjt`**） | ✓（V1-B） |
 | `sync.*` | 远程同步 | ❌ **不做**（docs/06 §V2；`.pjt` 走 Git） |
 
 ## 4. 关键参数约定
@@ -232,7 +258,7 @@ pjt milestone add|list|show|edit|activate|close|cancel|progress
 pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
           |archive|restore|delete|history
-pjt area add|list|show|tree|edit|archive|restore
+pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history
 pjt member add|list|show|edit|deactivate|activate|workload|activity|use
 pjt update add|list|show

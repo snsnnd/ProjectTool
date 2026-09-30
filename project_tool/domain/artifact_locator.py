@@ -32,7 +32,8 @@ URL_SCHEMES = ("http", "https")
 # `assets/Test Result 01.csv` 是完全正常的文件名。
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
 
-GIT_ADAPTER_NOTE = "git adapter not enabled (V1-B); locator is stored as a reference only"
+# 领域层只能做格式校验（没有 I/O）。真正的解析由 GitAdapter 在 service 层完成。
+GIT_ADAPTER_NOTE = "locator format ok; resolved against the git repository by the git adapter"
 
 # locator 完全不透明、不做形态校验的 kind（只守住路径安全底线）。
 OPAQUE_KINDS = frozenset(

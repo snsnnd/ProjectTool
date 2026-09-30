@@ -397,12 +397,28 @@ def test_verify_invalid_url_rejected_at_write_time(svc):
         svc.call("artifact.create", {"kind": "url", "locator": "example.com"})
 
 
-def test_verify_git_kinds_report_adapter_off(svc):
+def test_verify_git_kinds_without_git_available(svc, monkeypatch):
+    """没有 Git 仓库时：格式合法即 ok，但明确说「未验证」，不是 missing。"""
+    monkeypatch.setattr(
+        "project_tool.application.services.git.git_integration.detect",
+        lambda _root: (_ for _ in ()).throw(
+            __import__(
+                "project_tool.integrations.git", fromlist=["GitUnavailable"]
+            ).GitUnavailable("no repository")
+        ),
+    )
     svc.call("artifact.create", {"kind": "git_commit", "locator": "abc1234"})
     svc.call("artifact.create", {"kind": "git_branch", "locator": "feature/x"})
     results = svc.call("artifact.verify", {})
-    assert all(row["status"] == "ok" for row in results)
-    assert all("git adapter not enabled" in row["detail"] for row in results)
+    assert all(row["status"] == "skipped" for row in results)
+    assert all("git unavailable" in row["detail"] for row in results)
+
+
+def test_verify_git_commit_resolves_against_the_repository(svc):
+    """V1-B：git_commit 的 locator 现在能真的解析，不只是格式校验。"""
+    results = svc.call("artifact.verify", {})
+    # fixture 项目不在 git 仓库里 -> skipped（状态，不是错误）
+    assert all(row["status"] == "skipped" for row in results)
 
 
 def test_verify_opaque_kind_is_skipped(svc):

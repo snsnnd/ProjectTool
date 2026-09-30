@@ -21,6 +21,7 @@ from project_tool.application.registry import MethodSpec, build_registry
 from project_tool.application.services.area import AreaService
 from project_tool.application.services.artifact import ArtifactService
 from project_tool.application.services.decision import DecisionService
+from project_tool.application.services.git import GitService
 from project_tool.application.services.goal import GoalService
 from project_tool.application.services.graph import GraphService
 from project_tool.application.services.link import LinkService
@@ -68,6 +69,8 @@ class ProjectService:
         self.decisions = DecisionService(self.ctx)
         self.artifacts = ArtifactService(self.ctx)
         self.links = LinkService(self.ctx)
+        self.git = GitService(self.ctx)
+        self.artifacts.gits = self.git
         self.logs = LogService(self.ctx)
         self.graphs = GraphService(self.ctx, self.links)
 

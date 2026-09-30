@@ -81,6 +81,7 @@ Event 是 Project Tool 的不可变历史。本文件定义 V0.1 的 event 契�
 | `link.added` | link | `{name, kind}` | |
 | `link.updated` | link | `{fields*}` | |
 | `link.removed` | link | `{}` | 软删除（lifecycle=deleted） |
+| `git.commit_linked` | artifact | `{sha, short_sha, author, task_id, created}` | 只写 `.pjt`，不写 Git 仓库；同 commit 幂等（`created: false`） |
 | `object.archived` / `object.restored` / `object.deleted` | 任意 | `{lifecycle}` | 生命周期变更 |
 
 约定：

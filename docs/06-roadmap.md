@@ -81,19 +81,22 @@ V1-A 审查后、进入 Git Adapter 前的 4 个必须项 + 2 个小项：
 ✓ doctor 在 member/task rev 被篡改时仍可完整运行
 ```
 
-### V1-B — Git 感知层
+### V1-B — Git 感知层（已完成，`0.3.0`）
 
 dogfooding 后调整顺序：真实摩擦最大的是“任务 ↔ 产物”关联，
 因此 **Artifact 提前到 Git Adapter 之前**（V1-A 已完成 Artifact）：
 
 ```text
-Git Adapter（只读：pjt git status / scan，trailer: PJT-Task: TSK-…；支持 project root != git root）
-           Artifact 的 git_commit / git_branch locator 由此获得真实语义
-Search（本地结构化 + 全文）+ SQLite 索引（.pjt/local/index.sqlite，可重建）
-Local Web Server（FastAPI）+ React/TypeScript UI（Vite）
-Overview / Tasks(List+Board) / Graph / Timeline / Milestones / Areas / Goals /
-Decisions / Artifacts / Members / Linked Projects / Settings
+✓ Area.path_patterns（可选 glob 列表，把模块和目录关联起来；只推导不回写）
+✓ integrations/git.py 只读适配器（rev-parse / status / log / show 运行时白名单 +
+  --no-optional-locks，不抢别人的 index 锁；支持 project root != git root）
+✓ git.available / git.status / git.log / git.link_commit
+✓ trailer 约定 `PJT-Task: TSK-…`；git_commit Artifact 的 locator 现在能真正解析
+✓ `system.capabilities`: git = true
 ```
+
+**未做**：Search / SQLite 索引 / Local Web / FastAPI / React。
+2 个并发写者的 Git merge 辅助也仍未做（多人协作的前置，见 §V2 的「已知代价」）。
 
 V1-A **刻意未做**（留到有真实需求时）：Artifact 内容快照（blob/CAS）、
 Area 唯一名约束、Task 多 Area、Search / 索引。

@@ -202,8 +202,15 @@ def artifact_verify(
     ] = None,
 ) -> None:
     """Verify artifact references (read-only; no events, no network)."""
-    # 只取数据：render 传 no-op，避免把中间结果再 echo 一遍 JSON。
-    rows = execute(ctx, "artifact.verify", {"artifact_id": artifact_id}, render=lambda _rows: None)
+    execute(
+        ctx,
+        "artifact.verify",
+        {"artifact_id": artifact_id},
+        render=_render_verify,
+    )
+
+
+def _render_verify(rows: list[dict[str, Any]]) -> None:
     render_artifact_verify(rows)
     if any(row.get("status") == "missing" for row in rows):
         console.print(

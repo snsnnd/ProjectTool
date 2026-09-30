@@ -1,0 +1,96 @@
+workdir: /tmp/pjt-v1b-efw-tmszccnv
+efw:     /mnt/d/framework/new/efw
+===== 1. REAL EFW: read-only Git awareness =====
+
+--- 1.1 git.available —— project root != git root（EFW 的真实结构） ---
+{
+  "available": true,
+  "reason": null,
+  "work_tree": "/mnt/d/framework",
+  "git_dir": "/mnt/d/framework/.git",
+  "project_root": "/mnt/d/framework/new/efw",
+  "project_root_is_git_root": false,
+  "project_subdir": "new/efw"
+}
+  project root : /mnt/d/framework/new/efw
+  git root     : /mnt/d/framework
+  两者相同？    : False  -> 必须为 False（EFW 是子目录）
+
+--- 1.2 git.status —— 只列 project root 下的文件，.pjt 折叠成一行 ---
+  work_tree   : /mnt/d/framework
+  subdir      : new/efw
+  工程文件数  : 5
+    modified   .gitignore
+    modified   AGENTS.md
+    modified   docs/03-runtime.md
+    modified   docs/04-debug-and-api.md
+    modified   docs/05-ui-style.md
+  .pjt 文件数 : 68  {'untracked': 68}
+  未绑定 Area : []
+  => 真实 EFW 还没有 Area（V1-A 只在临时副本建过），所以 candidate_areas 全空
+  => 同仓库其它目录的改动（framework/ 根目录等）没有混进来，这就是 subdir 过滤的作用
+
+--- 1.3 git.log —— 真实提交历史 ---
+    2cb4a743  2026-09-30  snsnnd        Add new EFW Studio: model, codegen, virtual de
+  => EFW 现有提交没有 PJT-Task trailer（trailer 是 V1-B 才引入的约定）
+
+--- 1.4 只读保证：真实仓库状态没被我们碰过 ---
+  framework HEAD   : 2cb4a7433d7ff77c769fa083abd8c9e151929633
+  framework branch : tmp/new
+  reflog 条数      : 29
+  => 三个值与本轮开始前一致（见 v1a-evidence/00-efw-pollution-check.txt）
+
+===== 2. TEMP COPY: Area 目录绑定 + commit 关联 =====
+  copy          : /tmp/pjt-v1b-efw-tmszccnv/framework/new/efw
+  git work_tree : /tmp/pjt-v1b-efw-tmszccnv/framework
+  subdir        : new/efw
+
+--- 2.1 给 Area 绑 path_patterns（V1-B 新能力，可选） ---
+  created Core          <- ['studio_core/**']
+  created UI            <- ['ui/**']
+  created Debug         <- ['studio_core/debug.py', 'runtime/**']
+  created Runtime       <- ['runtime/**']
+  created Distribution  <- ['package.json', 'scripts/**', 'docs/**']
+  => Debug 和 Runtime 故意重叠（runtime/**），证明一个文件可命中多个 Area
+
+--- 2.2 制造改动，看 git.status 的 Area 映射 ---
+  status     path                               candidate areas
+  modified   package.json                       Distribution
+  modified   studio_core/debug.py               Core, Debug
+  modified   ui/store.tsx                       UI
+  => 重叠的 runtime/** 会同时出现在 Debug 与 Runtime 的候选里（推导，不是归类）
+
+--- 2.3 git.status --area 过滤 ---
+  --area UI     -> ['ui/store.tsx']
+  --area Debug  -> ['studio_core/debug.py']
+
+--- 2.4 commit trailer -> 任务关联（约定：PJT-Task: TSK-…） ---
+  target task: TSK-01M3R9P6  serial/tcp 回环集成测试（socat/pty）
+  commit: 4eee1bab15ff
+  git log --task -> [('4eee1bab', ['TSK-01M3R9P687D6CQME4B9531SDMP'])]
+
+--- 2.5 git.link-commit -> git_commit Artifact（只写 .pjt） ---
+  created   : True
+  artifact  : ART-01M3SBD9  kind=git_commit  locator=4eee1bab15ff
+  tasks     : ['TSK-01M3R9P687D6CQME4B9531SDMP']
+  幂等重跑  : created=False  same_artifact=True
+  仓库 HEAD 不变 : True
+  仓库 reflog 不变: True
+
+--- 2.6 task.related_artifacts 现在含 commit 引用 ---
+    git_commit   4eee1bab15ff     add serial/tcp loopback coverage
+
+--- 2.7 git_commit artifact 的 verify（git adapter 已启用） ---
+    ok       4eee1bab15ff  resolved to 4eee1bab15ff in /tmp/pjt-v1b-efw-tmszccnv/framework
+
+--- 2.8 事件 ---
+    git.commit_linked    {"author": "V1B Dogfood", "created": true, "sha": "4eee1bab15fff2d88d7482f1c0283f981828eca0", "short_sha": "4eee1bab15ff", "task_id": "TSK-01M3R9P687D6CQME4B9531SDMP"}
+
+--- 2.9 零写入证明：git 操作前后工程源码树 sha256 对比 ---
+  TREE HASH: IDENTICAL  => git 操作只写了 .pjt/**，一个工程文件都没碰
+  files compared: 161  (基线取自 2.2 故意改动之后)
+
+--- 2.10 doctor ---
+  ok=True objects=33 errors=0 warnings=0
+
+done. workdir kept: /tmp/pjt-v1b-efw-tmszccnv

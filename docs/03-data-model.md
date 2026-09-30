@@ -243,10 +243,18 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
   "id": "ARA-01K8H6ZA0T", "type": "area",
   "name": "Debug",
   "description": "真机调试与传输层",
-  "parent_area_id": null
+  "parent_area_id": null,
+  "path_patterns": []
 }
 ```
 
+- `path_patterns`（V1-B，**可选**）：相对 project root 的 glob 列表，用于让 Git Adapter
+  把改动的文件映射到候选 Area。空列表 = 纯语义 Area，行为与 V1-A 完全一致。
+  必须是 project-relative；绝对路径 / `..` / `.pjt/**` 一律拒绝。
+  只支持 Git 风格通配：`*`（不跨 `/`）、`**`（跨 `/`）、`?`、`[a-z]`；不实现 `{}` 展开。
+- **Git Adapter 只推导、不回写**：`changed file → 候选 Area` 仅作为信息呈现，
+  **绝不自动改写 `Task.area_id`**。Area 是人工判断的结构信息，从路径机械推导并回写
+  会把跨 Area 的 commit 错误归类。
 - Area 回答「这个工作属于哪里？」（模块 / 子系统），Milestone 回答「这个工作服务于哪个阶段？」。
 - **没有** `status` / `progress` / `due_at` / `owner`：给它加进度就退化成第二个 Milestone。
   读视图 `area.get` / `area.list` / `graph.project` 也**不返回 progress**。

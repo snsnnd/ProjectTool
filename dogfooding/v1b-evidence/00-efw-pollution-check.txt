@@ -1,0 +1,19 @@
+===== EFW POLLUTION CHECK (V1-B: Git awareness) =====
+
+--- framework git status 行数（V1-A 基线 = 138）---
+  138
+
+--- new/efw diff --stat：与 V1-A 记录逐字节一致？ ---
+  IDENTICAL  => EFW 源码/文档 diff 一个字节都没变
+
+--- 无任何 git 写操作 ---
+  branch : tmp/new
+  HEAD   : 2cb4a7433d7ff77c769fa083abd8c9e151929633
+  reflog : 29 条（与 V1-B 开始前一致）
+
+--- 本轮对真实 EFW 只跑了只读命令 ---
+  pjt git available   -> 只读
+  pjt git status      -> 只读（--no-optional-locks，不抢 .git/index 锁）
+  pjt git log         -> 只读
+  pjt doctor/status   -> 只读
+  （git.link-commit 与 Area 绑定 path_patterns 只在 /tmp 临时副本上执行）
