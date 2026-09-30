@@ -35,6 +35,8 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# 注意：addopts 里的 -q 意味着 CI 的 `uv run pytest` 也是 -q；
+# 想看失败详情必须显式加 -rf/--tb=short（CI 里已经这么写了）。
 addopts = "-q"
 
 [tool.ruff]

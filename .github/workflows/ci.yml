@@ -31,4 +31,6 @@ jobs:
         run: uv run mypy project_tool
 
       - name: Tests (pytest)
-        run: uv run pytest
+        # -rf 列出失败用例名，--tb=short 控制 traceback 长度；
+        # -p no:cacheprovider 让 CI 不留 .pytest_cache（纯本地提速用）。
+        run: uv run pytest -rf --tb=short -p no:cacheprovider

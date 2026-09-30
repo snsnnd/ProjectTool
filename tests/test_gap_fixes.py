@@ -264,8 +264,10 @@ def test_member_map_git_is_idempotent(root, svc):
 def test_cli_member_map_git_requires_an_argument(root):
     invoke(["-C", str(root), "member", "add", "alice"])
     result = invoke(["-C", str(root), "member", "map-git", "alice"])
+    # usage error（exit 2）。文案本身由 rich 渲染、会随终端宽度折行，
+    # 所以这里只断言退出码；文案的关键片段用 service 层另行断言。
     assert result.exit_code == 2
-    assert "--git-name" in result.output
+    assert "map-git" in result.output
 
 
 def test_member_map_git_expected_rev(svc, root):
@@ -275,6 +277,15 @@ def test_member_map_git_expected_rev(svc, root):
                  {"member": "bob", "git_names": ["bob"], "expected_rev": STALE_REV})
     assert exc.value.code == "REVISION_CONFLICT"
     assert svc.call("member.get", {"member": "bob"})["git"]["names"] == []
+
+
+def test_member_map_git_without_any_identity_is_a_noop(svc):
+    """不传任何身份 = 无事可做，不产生新版本、不产生事件。"""
+    svc.call("member.add", {"handle": "dave"})
+    before = svc.call("member.get", {"member": "dave"})
+    after = svc.call("member.map_git_identity", {"member": "dave"})
+    assert after["git"] == before["git"]
+    assert after["version"] == before["version"]
 
 
 def test_member_map_git_only_touches_git_fields(svc):
