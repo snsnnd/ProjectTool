@@ -31,11 +31,22 @@ from project_tool.application.services.project import CAPABILITIES_FEATURES, Pro
 from project_tool.application.services.system import SystemService
 from project_tool.application.services.task import TaskService
 from project_tool.application.services.update import UpdateService
-from project_tool.domain.errors import InvalidArgument, ProjectToolError
+from project_tool.domain.errors import (
+    InvalidArgument,
+    ProjectToolError,
+    SchemaMigrationRequired,
+)
 from project_tool.storage import open_project
 from project_tool.version import SCHEMA_VERSION
 
 PROTOCOL_VERSION = 1
+
+# 维护类方法：不受 schema 写入门限制。
+# - project.init     在打开项目之前执行，没有 schema 可言
+# - project.migrate  正是「把 schema 抬到当前版本」的那一步本身
+# - project.recover  只重放已 staged 的字节，不会在 1.0 项目里写出 1.1 对象
+#                    （崩溃残留必须总能恢复，不能被写入门挡住）
+SCHEMA_GATE_EXEMPT = frozenset({"project.init", "project.migrate", "project.recover"})
 
 
 class ProjectService:
@@ -85,6 +96,8 @@ class ProjectService:
         spec = self.registry.get(str(method))
         if spec is None:
             raise InvalidArgument(f"unknown method: {method!r}")
+        if spec.mutating and spec.name not in SCHEMA_GATE_EXEMPT:
+            self._require_current_schema(spec.name)
         return spec.handler(**params)
 
     def handle(
@@ -99,6 +112,23 @@ class ProjectService:
             return {"id": request_id, "error": exc.to_error()}
 
     # ---------------------------------------------------------------- 能力发现
+
+    def _require_current_schema(self, method: str) -> None:
+        """Schema 写入门：项目头声明的 schema 必须已经是当前工具的版本。
+
+        没有这道门就会出现「project.json 说 1.0，里面却已经有 1.1 对象」的不一致状态，
+        而 `schema_version` 也就失去了作为兼容性声明的意义。
+        读路径不受影响（1.0 项目照常可读，正是为了让人能跑 `pjt migrate`）。
+        """
+        current = self.ctx.opened.project.schema_version
+        if current == SCHEMA_VERSION:
+            return
+        raise SchemaMigrationRequired(
+            f"{method} requires schema {SCHEMA_VERSION} but this project is {current}; "
+            "run 'pjt migrate' first",
+            project_schema=current,
+            tool_schema=SCHEMA_VERSION,
+        )
 
     def system_capabilities(self) -> dict[str, Any]:
         return {

@@ -253,7 +253,8 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
 - `parent_area_id` 支持简单父子层级（`UI ├── Editor └── Debug UI`）；
   环检测与 goal/task parent 复用同一套 `_validate_chain`。
 - 名称**不强制唯一**（与 goal/milestone/task 的 title 一致）；按名称引用时不唯一则报
-  `INVALID_ARGUMENT`（要求用 ID/短 ID 消歧），而不是猜一个。
+  `INVALID_ARGUMENT: ambiguous area name ...` 并**列出候选 ID**（要求用 ID/短 ID 消歧），
+  不是 `NOT_FOUND`，更不猜。
 - Area ≠ Label：Label 是自由标签（`bug` / `test` / `high-risk`），没有结构；
   Area 是有类型（`ARA-`）、有层级、可被引用的稳定分区。
   `refs/labels.json` 仍然只聚合 Task.labels，不含 Area。
@@ -293,11 +294,15 @@ design hardware image other`。
 
 | kind | 例子 | 校验 |
 |---|---|---|
-| `file` | `studio_core/debug.py` | 必须是 project-relative 路径；禁绝对路径 / 盘符 / UNC / `..` / `.pjt/**` |
+| `file` | `studio_core/debug.py` | 必须是 project-relative 路径；禁绝对路径 / 盘符 / UNC / `..` / `.pjt/**` / 控制字符。**允许普通空格**（`docs/Design Notes.md` 是真实工程常态） |
 | `url` | `https://…` | http(s) + netloc（**不做网络请求**） |
 | `git_commit` | `abc123` | 4–40 位十六进制（Git Adapter 未启用，只存引用） |
 | `git_branch` | `feature/foo` | git ref-name 字符集，无 `..` |
 | 其余 10 种 | `brd rev C` | 不透明引用；只守住「非机器本地绝对路径」「不逃出 project root」 |
+
+**控制字符**（换行 / 制表 / ESC …）在**所有** kind 的 locator 里都非法——它们会破坏 CLI 表格
+输出、事件 JSON 与 payload 的可读性。普通空格只在 `file` / 10 种不透明 kind 里合法；
+`url`（RFC 3986 要求百分号编码）、`git_commit`、`git_branch` 禁止任何空白。
 
 `artifact.verify` 是**纯查询**：不产生事件、不修改文件。`file` 检查存在性，
 `url` 只校验格式，`git_*` 报告「adapter 未启用」，其余标记 `skipped`。

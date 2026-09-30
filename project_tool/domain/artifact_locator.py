@@ -26,6 +26,12 @@ GIT_BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,255}$")
 RESERVED_DIR = ".pjt"
 URL_SCHEMES = ("http", "https")
 
+# 控制字符（换行/制表/ESC…）在任何 kind 的 locator 里都是非法的：
+# 它们会破坏 CLI 表格输出、事件 JSON 和事件 payload 的可读性。
+# 普通空格则不是问题——真实工程里 `docs/Design Notes.md`、
+# `assets/Test Result 01.csv` 是完全正常的文件名。
+CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
 GIT_ADAPTER_NOTE = "git adapter not enabled (V1-B); locator is stored as a reference only"
 
 # locator 完全不透明、不做形态校验的 kind（只守住路径安全底线）。
@@ -79,29 +85,33 @@ def check_locator(kind: ArtifactKind, locator: str) -> str:
     text = str(locator or "").strip()
     if not text:
         raise InvalidArgument("artifact locator must not be empty")
+    if CONTROL_CHARS_RE.search(text):
+        raise InvalidArgument(
+            f"artifact locator must not contain control characters (newline, tab, …): {locator!r}"
+        )
 
     if kind in OPAQUE_KINDS:
         # 设计稿 / 硬件 / 影像等 kind 的 locator 是不透明引用（"PCB rev C" 也合法），
         # 只守住「不能是机器本地绝对路径 / 不能逃出 project root」这两条底线。
         return _check_opaque(text)
 
-    if any(char.isspace() for char in text):
-        raise InvalidArgument(f"{kind.value} artifact locator must not contain whitespace: {locator!r}")
-
     if kind == ArtifactKind.URL:
+        # RFC 3986 不允许 URL 里出现裸空格（必须百分号编码）。urlsplit 很宽松，
+        # 不会替我们抓这个错；存一条坏 URL 只会等到下游消费者才炸。
+        if any(char.isspace() for char in text):
+            raise InvalidArgument(
+                f"url artifact locator must not contain whitespace (encode as %20): {locator!r}"
+            )
         _check_url(text)
         return text
 
     if kind == ArtifactKind.FILE:
+        # file 允许普通空格：真实工程文件名含空格非常常见，不该由工具规定禁止。
         return normalize_file_locator(text)
 
-    # 非 url / file 的 kind：仍然禁止机器本地绝对路径与路径逃逸。
-    if WINDOWS_DRIVE_RE.match(text) or text.startswith(("\\\\", "//", "/", "~")):
-        raise InvalidArgument(
-            f"artifact locator must not be a machine-local absolute path: {locator!r}"
-        )
-    if any(segment == ".." for segment in text.replace("\\", "/").split("/")):
-        raise InvalidArgument(f"artifact locator must not escape the project root: {locator!r}")
+    # git_commit / git_branch：git 标识符不允许任何空白。
+    if any(char.isspace() for char in text):
+        raise InvalidArgument(f"{kind.value} artifact locator must not contain whitespace: {locator!r}")
 
     if kind == ArtifactKind.GIT_COMMIT:
         if not HEX_RE.match(text):

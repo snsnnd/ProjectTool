@@ -1,6 +1,9 @@
 [project]
 name = "project-tool"
-version = "0.1.0"
+# 单一版本来源：`project_tool/version.py`。
+# 这里不写死 version，hatchling 在构建时从 version.py 读 __version__，
+# 避免「包元数据版本」与「运行时 pjt --version」不一致。
+dynamic = ["version"]
 description = "Local-first, Git-aware project state and collaboration system"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -16,6 +19,9 @@ pjt = "project_tool.cli.main:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "project_tool/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["project_tool"]

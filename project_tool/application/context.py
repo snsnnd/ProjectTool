@@ -106,7 +106,10 @@ def resolve_actor(opened, explicit: str | None = None) -> str | None:
             return resolve_member_id(store, str(candidate))
         except ProjectToolError:
             continue
-    members = sorted(store.list_models("member"), key=lambda member: member.id)
+    # check_rev=False：解析 actor 是尽力而为的记账问题（这次是谁在操作），
+    # 不是数据完整性门——否则一个被改坏的 member 对象会让 ServiceContext 构造失败，
+    # `pjt doctor` 也就永远跑不起来。member 真正被业务读取时仍走 ctx.load 的校验。
+    members = sorted(store.list_models("member", check_rev=False), key=lambda member: member.id)
     for member in members:
         if getattr(member, "active", False) and member.lifecycle == Lifecycle.ACTIVE:
             return member.id
@@ -154,8 +157,8 @@ class ServiceContext:
     def area_id(self, ref) -> str | None:
         """Area 引用解析：接受 ID / 短 ID / 名称（大小写不敏感）。
 
-        名称不唯一时拒绝猜测（Area 名称本身不强制唯一，见 docs/09-v1a-design.md §2.5），
-        要求调用方用 ID/短 ID 消歧。
+        名称不唯一时报 `INVALID_ARGUMENT` 并列出候选（Area 名称本身不强制唯一，
+        见 docs/09-v1a-design.md §2.5）；不猜。
         """
         if ref is None or ref == "":
             return None
@@ -164,16 +167,24 @@ class ServiceContext:
             return None
         if text.upper().startswith("ARA-"):
             return self.resolve_ref("area", text)
-        record = self.store.find_by_name("area", text)
-        if record is not None:
-            return str(record["id"])
+
+        by_name = self.store.find_all_by_name("area", text)
+        if len(by_name) > 1:
+            candidates = sorted(str(record["id"]) for record in by_name)
+            raise InvalidArgument(
+                f"ambiguous area name {ref!r}: matches {len(candidates)} areas "
+                f"({', '.join(candidates[:3])} ...); use the id or a short id"
+            )
+        if len(by_name) == 1:
+            return str(by_name[0]["id"])
+
         matches = sorted(
             path.stem for path in self.store.dir_for("area").glob(f"ARA-{text.upper()}*.json")
         )
         if len(matches) > 1:
             raise InvalidArgument(
                 f"ambiguous area reference {ref!r}: matches {len(matches)} areas "
-                f"({', '.join(matches[:3])} ...)"
+                f"({', '.join(matches[:3])} ...); use a longer short id"
             )
         if len(matches) == 1:
             return matches[0]

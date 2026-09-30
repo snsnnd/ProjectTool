@@ -157,6 +157,17 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
   此外每个事务在提交前重新校验全部 `base_rev`，并发修改不会被静默覆盖。
 - 多对象操作（`decision.supersede`）只接受一个 `expected_rev`，作用于主目标 `old_id`；
   `new_id` 的 base_rev 在 load 时读取并由事务层强制校验。
+- **Schema 写入门**：项目头 `project.json.schema_version` 必须已经等于工具的
+  `SCHEMA_VERSION`，否则**所有 mutating method** 返回 `SCHEMA_MIGRATION_REQUIRED`。
+  读路径不受影响（这正是让人能跑 `pjt migrate` 的前提）。
+  实现在 `ProjectService.call()` 一处，按 `MethodSpec.mutating` 判定；
+  豁免 `project.init` / `project.migrate` / `project.recover`
+  （recover 必须永远能跑，否则崩溃残留无法恢复）。
+- **rev 校验（完整性门）**：`ObjectStore.load_model` / `list_models` 在把对象变成领域模型时
+  强制 `verify_rev(record)`。对象文件被手改、Git merge 或冲突解决动过之后，
+  **读取时**就报 `PROJECT_CORRUPTED`，而不是等到下一次写入把它「洗白」重新签名。
+  例外：`get_raw` / `list_raw` / `load_raw` 是读字节，不校验；
+  `doctor` 用 `check_rev=False`，保证数据已损坏时仍能出报告。
 - 列表方法统一支持 `limit`；日志/列表按时间倒序。
 - 时间参数（`since` / `until`）接受 ISO-8601 或相对时间 `7d` / `24h` / `30m`。
 - 引用校验：新引用不得指向 `lifecycle=deleted` 的对象；
@@ -189,7 +200,8 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
 | `PERMISSION_DENIED` / `AUTH_REQUIRED` | 权限（V2） | 6 |
 | `REMOTE_UNAVAILABLE` | 远程不可达（V2） | 7 |
 | `SYNC_CONFLICT` | 同步冲突（V2） | 8 |
-| `SCHEMA_UNSUPPORTED` / `PROJECT_CORRUPTED` | 结构损坏/版本不支持 | 9 |
+| `SCHEMA_MIGRATION_REQUIRED` | 项目 schema 落后于工具；读允许，**写被拦**，先 `pjt migrate` | 9 |
+| `SCHEMA_UNSUPPORTED` / `PROJECT_CORRUPTED` | 结构损坏 / major 版本不兼容 / 对象被外部篡改 | 9 |
 
 Usage error（Typer 解析失败）固定 exit 2。
 

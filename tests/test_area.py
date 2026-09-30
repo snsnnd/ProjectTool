@@ -94,9 +94,21 @@ def test_area_short_id_ambiguity_rejected(svc, areas):
 def test_area_duplicate_names_are_not_merged(svc, areas):
     second = svc.call("area.create", {"name": "Debug"})
     assert second["id"] != areas["Debug"]["id"]
-    # 名称不唯一 -> 拒绝猜测，要求调用方用 ID 消歧。
-    with pytest.raises(NotFound) as exc:
+    # 名称不唯一 -> INVALID_ARGUMENT（不是 NOT_FOUND）：文档与行为必须一致，
+    # 并且必须列出候选 ID 让用户能消歧。
+    with pytest.raises(InvalidArgument) as exc:
         svc.call("area.get", {"area_id": "Debug"})
+    message = str(exc.value)
+    assert "ambiguous area name" in message
+    assert areas["Debug"]["id"] in message
+    assert second["id"] in message
+    # 用 ID / 短 ID 仍然精确可读
+    assert svc.call("area.get", {"area_id": second["id"]})["id"] == second["id"]
+
+
+def test_area_unknown_name_is_not_found(svc, areas):
+    with pytest.raises(NotFound) as exc:
+        svc.call("area.get", {"area_id": "NoSuchArea"})
     assert "no area with that name" in str(exc.value)
 
 

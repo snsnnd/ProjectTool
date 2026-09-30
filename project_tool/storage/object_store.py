@@ -13,6 +13,7 @@ from project_tool.domain.base import BaseObject
 from project_tool.domain.decision import Decision
 from project_tool.domain.errors import InvalidArgument, NotFound, ProjectCorrupted
 from project_tool.domain.goal import Goal
+from project_tool.domain.hashing import verify_rev
 from project_tool.domain.ids import (
     CROCKFORD,
     PREFIX_BY_TYPE,
@@ -65,9 +66,9 @@ class ObjectStore:
             raise NotFound(f"{obj_type} {ref!r} not found")
         return object_id, record
 
-    def load_model(self, obj_type: str, ref: str) -> BaseObject:
+    def load_model(self, obj_type: str, ref: str, check_rev: bool = True) -> BaseObject:
         object_id, record = self.load_raw(obj_type, ref)
-        return self._to_model(obj_type, record)
+        return self._to_model(obj_type, record, check_rev=check_rev)
 
     def list_raw(self, obj_type: str, include_deleted: bool = False) -> list[dict]:
         records: list[dict] = []
@@ -81,8 +82,13 @@ class ObjectStore:
             records.append(record)
         return records
 
-    def list_models(self, obj_type: str, include_deleted: bool = False) -> list[BaseObject]:
-        return [self._to_model(obj_type, record) for record in self.list_raw(obj_type, include_deleted)]
+    def list_models(
+        self, obj_type: str, include_deleted: bool = False, check_rev: bool = True
+    ) -> list[BaseObject]:
+        return [
+            self._to_model(obj_type, record, check_rev=check_rev)
+            for record in self.list_raw(obj_type, include_deleted)
+        ]
 
     def ids(self, obj_type: str, include_deleted: bool = False) -> list[str]:
         return [record["id"] for record in self.list_raw(obj_type, include_deleted)]
@@ -148,18 +154,20 @@ class ObjectStore:
         return None
 
     def find_by_name(self, obj_type: str, name: str) -> dict | None:
-        """按名称大小写不敏感查找（Area 用；名称不唯一，返回 None 交由调用方报错）。"""
+        """按名称大小写不敏感查找（Area 用）。名称不唯一时返回 None（用 find_all_by_name 区分）。"""
+        matches = self.find_all_by_name(obj_type, name)
+        return matches[0] if len(matches) == 1 else None
+
+    def find_all_by_name(self, obj_type: str, name: str) -> list[dict]:
+        """按名称大小写不敏感查找全部匹配（Area 用；Area 名称不强制唯一）。"""
         wanted = str(name or "").strip().casefold()
         if not wanted:
-            return None
-        found: dict | None = None
-        for record in self.list_raw(obj_type):
-            if str(record.get("name", "")).strip().casefold() != wanted:
-                continue
-            if found is not None:
-                return None
-            found = record
-        return found
+            return []
+        return [
+            record
+            for record in self.list_raw(obj_type)
+            if str(record.get("name", "")).strip().casefold() == wanted
+        ]
 
     def _read_record(self, path: Path) -> dict:
         try:
@@ -170,7 +178,26 @@ class ObjectStore:
             raise ProjectCorrupted(f"object file {path} is not a JSON object")
         return data
 
-    def _to_model(self, obj_type: str, record: dict) -> BaseObject:
+    def _to_model(self, obj_type: str, record: dict, check_rev: bool = True) -> BaseObject:
+        """把 raw record 变成领域模型。
+
+        `check_rev=True`（默认，所有正常读路径）：内容哈希必须与 `rev` 一致。
+        这是 canonical 数据的完整性门——对象文件被 Git merge / 手工编辑 / 冲突解决
+        改过之后，必须在**读取时**就报 `PROJECT_CORRUPTED`，而不是等到下一次写操作
+        把它「洗白」（重新算一个 rev 签上名）。
+
+        `check_rev=False` 只给 `doctor` 用：doctor 必须在数据已损坏时还能把对象读出来，
+        否则第一条坏数据就会让诊断本身崩掉，报告不出「哪条 rev 不匹配」。
+
+        原始访问（`get_raw` / `list_raw` / `load_raw`）永远不校验 rev——
+        那是「读取字节」而不是「信任 canonical 数据」。
+        """
+        if check_rev and not verify_rev(record):
+            raise ProjectCorrupted(
+                f"{obj_type} {record.get('id')} rev mismatch: the object file was modified "
+                "outside Project Tool (hand edit, Git merge or conflict resolution). "
+                "Run 'pjt doctor' to inspect, then restore from events/ or Git history"
+            )
         model_cls = MODEL_BY_TYPE[obj_type]
         try:
             return model_cls.model_validate(record)

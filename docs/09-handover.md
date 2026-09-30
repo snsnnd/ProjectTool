@@ -17,9 +17,9 @@ Git tracks code. Project Tool tracks the project.
 
 | 项 | 值 |
 |---|---|
-| 版本 | `0.2.0`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py`） |
-| 关键提交 | `6a19628` V0 核心+CLI → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` 统一 expected_rev → `d73a492` Area → `52e1a9f` Artifact |
-| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **250 passed** · CI（Ubuntu+Windows, Py3.12） |
+| 版本 | `0.2.1`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
+| 关键提交 | `6a19628` V0 核心+CLI → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` 统一 expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening |
+| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **271 passed** · CI（Ubuntu+Windows, Py3.12） |
 | 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（Area 映射、Artifact 关联、零污染树哈希） |
 | Service API | 显式 registry，**103 个 method**，`system.capabilities` 可发现（`area=true, artifact=true`） |
 | 未实现 | Git Adapter / Search / SQLite 索引 / Web / Remote / Sync / KC / Artifact 内容快照（V1-B+） |
@@ -29,7 +29,7 @@ Git tracks code. Project Tool tracks the project.
 ```bash
 cd /path/to/ProjectTool
 uv sync
-uv run pytest                          # 250 passed
+uv run pytest                          # 271 passed
 uv run ruff check . && uv run mypy project_tool
 
 # 在临时目录体验完整流程（不要污染别人的真实项目）
@@ -60,7 +60,7 @@ ProjectTool/
 │   ├── graph/           # 依赖/层级/进度推导
 │   ├── integrations/    # filesystem（原子写、fsync）
 │   └── cli/             # Typer：main/common/render + 各域模块
-├── tests/               # 19 个测试文件，250 cases
+├── tests/               # 20 个测试文件，271 cases
 ├── docs/                # 01–09（09-handover = 本文件，09-v1a-design = 本轮设计记录）
 ├── dogfooding/          # EFW 真实项目验证报告 + 证据 + 可复现脚本
 ├── pyproject.toml       # uv；dev 依赖 pytest/ruff/mypy；ruff+mypy 配置
@@ -128,6 +128,13 @@ CLI / Web / SDK
     `artifact.remove` 只软删引用对象。
 17. **只有 mutation 产生事件**：`artifact.verify` / `area.list` / `task.get` / `*.progress`
     一律无事件。
+18. **Schema 写入门**：项目头 schema 必须等于工具 schema，否则所有 mutating method
+    报 `SCHEMA_MIGRATION_REQUIRED`。实现在 `ProjectService.call()` 一处（按
+    `MethodSpec.mutating`），豁免 `project.init` / `migrate` / `recover`。
+19. **读取即校验 rev**：`load_model` / `list_models` 强制 `verify_rev`。
+    对象被手改 / Git merge / 冲突解决动过之后，**读取时**报 `PROJECT_CORRUPTED`，
+    不允许靠下一次写入「洗白」。唯一例外是 `doctor`（`check_rev=False`）与
+    `resolve_actor`——它们必须在数据已损坏时仍能工作。
 
 ## 6. 协议速查
 
@@ -182,7 +189,8 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
 | `test_task_ready_cli.py` | `task ready`：状态来源、CLI 薄适配、事件、JSON、computed blocked 不被破坏 |
 | `test_expected_rev.py` | 七领域 × 正确/过期/省略 三态 + no-op 也不吞过期 rev |
 | `test_area.py` | Area CRUD、Task 归属与过滤、层级环、doctor、事件、迁移兼容 |
-| `test_artifact.py` | locator 安全、关系、verify（存在/缺失/穿越/绝对路径/URL）、rev、事件、doctor、零写入 |
+| `test_artifact.py` | locator 安全（含合法空格）、关系、verify（存在/缺失/穿越/绝对路径/URL）、rev、事件、doctor、零写入 |
+| `test_hardening.py` | V1-A.1：版本单一来源、schema 写入门、读路径 rev 校验、篡改不可洗白、doctor 韧性 |
 
 写测试要求：只用 `tmp_path` + monkeypatch；禁止 sleep/网络/随机碰撞；失败注入用确定性的 monkeypatch（参考 `test_transaction_recovery.py` 的 `crash_on_apply`）。
 
@@ -236,6 +244,31 @@ V1-A 已完成 Artifact，因此下一个自然落点是 **Git Adapter（只读�
 
 1. **先定 Area ↔ 目录的关系**（见 §8「模型层待决」）。这是 Git Adapter 的前置条件：
    Area 不和目录绑定，`task list --area UI` 就无法自动推出该看哪些文件。
+
+   **不要用单个 `path = ui/`**——真实映射是多对多的：
+
+   ```text
+   Distribution
+   ├── desktop/**
+   ├── scripts/**
+   ├── package.json
+   └── electron-builder config
+   ```
+
+   更合理的形状是 **glob 列表**（`path_patterns: ["desktop/**", "scripts/**", "package.json"]`），
+   这样「一个 Area 跨多个不连续路径」和「一个 glob 命中多个 Area」都能表达。
+   代价是把目录结构写进 canonical 数据：重命名目录会留下悬挂引用。
+   三个选项要一起决定：**硬绑定 / 可选绑定（无绑定时退回人工） / 保持纯语义不做绑定**。
+
+   无论选哪个，Git Adapter 只允许 **推导**：
+
+   ```text
+   changed file  ->  候选 Area（报告 / 建议 / 生成命令）
+   绝不  ->  自动改写 Task.area_id
+   ```
+
+   否则一个跨 Area 的 commit 会被错误归类，而 Area 是**人工维护的结构判断**，
+   不是可以从文件路径机械推导出来的东西。
 2. **Git Adapter（只读）**
    - `integrations/git.py`：`detect/status/scan_commits`（trailer `PJT-Task: TSK-…`）；
    - 产出 Artifact：`kind=git_commit` / `git_branch` 的 locator 从「格式校验」升级为
@@ -264,7 +297,10 @@ V1-A 已完成 Artifact，因此下一个自然落点是 **Git Adapter（只读�
 
 - 本仓库：改动 → `ruff/mypy/pytest` 全绿 → commit → push（`origin/main`；push 走 SSH）。
 - 修改公共行为必须同步：`docs/05`（方法/CLI）、`docs/03`（模型/校验）、`docs/08`（event payload）。
-- 版本：`project_tool/version.py`；不兼容模型变化才升 `SCHEMA_VERSION` major。
+- 版本：`project_tool/version.py`（唯一来源，`pyproject.toml` 用 `dynamic = ["version"]` 指向它）；
+  不兼容模型变化才升 `SCHEMA_VERSION` major。
+  本仓库是 editable 安装，**改完版本号要 `uv pip install -e . --reinstall-package project-tool`**
+  才能让包元数据跟上（`tests/test_hardening.py` 会抓到这种漂移）。
 - CI 在 push/PR 上跑三件套；Windows job 覆盖 WriteLock 平台分支。
 
 ## 12. Dogfooding 数据与规则（重要）

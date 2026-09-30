@@ -66,6 +66,21 @@ V0.1 dogfooding 暴露的 P2/P3 中「已被真实使用证明有价值」的四
 
 设计记录：`docs/09-v1a-design.md`；EFW 验证：`dogfooding/v1a-area-analysis.md`。
 
+### V1-A.1 — Hardening（已完成，`0.2.1`）
+
+V1-A 审查后、进入 Git Adapter 前的 4 个必须项 + 2 个小项：
+
+```text
+✓ 版本号单一来源（pyproject dynamic = ["version"] -> version.py，消除元数据/runtime 漂移）
+✓ Schema 写入门：project schema != tool schema 时拦下所有 mutating method
+  （SCHEMA_MIGRATION_REQUIRED；豁免 init / migrate / recover；实现在 ProjectService.call）
+✓ 读路径 rev 校验：被外部篡改的对象读取即 PROJECT_CORRUPTED，无法靠下一次写入洗白
+  （doctor 与 resolve_actor 例外，保证数据已损坏时仍能出报告）
+✓ file Artifact 允许合法空格路径（控制字符仍禁止；url/git_* 仍禁空白）
+✓ Area 重名 -> INVALID_ARGUMENT 并列出候选（原来落到 NOT_FOUND，与文档不一致）
+✓ doctor 在 member/task rev 被篡改时仍可完整运行
+```
+
 ### V1-B — Git 感知层
 
 dogfooding 后调整顺序：真实摩擦最大的是“任务 ↔ 产物”关联，

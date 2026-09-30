@@ -93,6 +93,24 @@ class SchemaUnsupported(ProjectToolError):
     exit_code = 9
 
 
+class SchemaMigrationRequired(ProjectToolError):
+    """项目 schema 落后于工具：读允许，写被拦住，必须先 `pjt migrate`。"""
+
+    code = "SCHEMA_MIGRATION_REQUIRED"
+    exit_code = 9
+
+    def __init__(
+        self,
+        message: str,
+        project_schema: str | None = None,
+        tool_schema: str | None = None,
+    ):
+        super().__init__(
+            message,
+            {"project_schema_version": project_schema, "tool_schema_version": tool_schema},
+        )
+
+
 class ProjectCorrupted(ProjectToolError):
     code = "PROJECT_CORRUPTED"
     exit_code = 9

@@ -13,10 +13,14 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 
 ## 1. 当前状态
 
-- 版本 `0.2.0`，`SCHEMA_VERSION = "1.1"`。
+- 版本 `0.2.1`，`SCHEMA_VERSION = "1.1"`。**`version.py` 是唯一版本来源**
+  （`pyproject.toml` 用 `dynamic = ["version"]` 指向它）。
+  改版本号后本仓库的可编辑安装元数据不会自动刷新，需要
+  `uv pip install -e . --reinstall-package project-tool`（CI 的全新 `uv sync` 不受影响）。
 - 提交线：`6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding 报告
-  → `779a886` 统一 expected_rev → `d73a492` Area → `52e1a9f` Artifact。
-- 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（250 passed）；
+  → `779a886` 统一 expected_rev → `d73a492` Area → `52e1a9f` Artifact
+  → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening。
+- 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（271 passed）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
   **Artifact** / Link；Service 103 个 method。
@@ -26,7 +30,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 未实现（V1-B+）：Git Adapter / Search / SQLite 索引 / Web / Remote / Sync / KC /
   Artifact 内容快照。
 
-## 2. 最重要十条（违反即事故）
+## 2. 最重要十一条（违反即事故）
 
 1. `.pjt` 是唯一数据源；`project.json + objects/ + events/` 不可被缓存替代。
 2. Event append-only；禁止任何 update/delete 事件的 API 或脚本。
@@ -43,6 +47,10 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     **Area ≠ Label**：Label 是自由标签，Area 是一等对象（有 rev、有层级、doctor 校验）。
     **Artifact 只是引用**：`kind=file` 的 locator 必须是 project-relative 路径；
     任何写路径都不得 copy/move/delete/rename 被引用的工程文件。
+11. **Schema 写入门 + 读即校验 rev**：项目 schema 落后时禁止所有写操作
+    （`SCHEMA_MIGRATION_REQUIRED`）；`load_model`/`list_models` 强制 `verify_rev`，
+    被外部篡改的对象读取即 `PROJECT_CORRUPTED`，不允许靠下一次写入洗白。
+    例外只有 `doctor` 与 `resolve_actor`（数据已损坏时它们必须仍能工作）。
 
 ## 3. 常用命令
 

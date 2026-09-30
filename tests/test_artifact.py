@@ -117,12 +117,29 @@ def test_artifact_name_defaults_to_locator(svc):
         ".pjt",
         "",
         "   ",
-        "with space.txt",
+        "docs/a\nb.md",
+        "docs/a\tb.md",
     ],
 )
 def test_file_locator_rejections(svc, locator):
     with pytest.raises(InvalidArgument):
         svc.call("artifact.create", {"kind": "file", "locator": locator})
+
+
+def test_file_locator_allows_ordinary_spaces(svc):
+    """真实工程里含空格的文件名非常常见，工具不该规定禁止。"""
+    for locator in (
+        "docs/Design Notes.md",
+        "assets/Test Result 01.csv",
+        "hardware/Board Rev A.pdf",
+        "with space.txt",
+    ):
+        record = svc.call("artifact.create", {"kind": "file", "locator": locator})
+        assert record["locator"] == locator
+        # 前后空白仍然被 strip
+    assert svc.call(
+        "artifact.create", {"kind": "file", "locator": "  docs/Padded.md  "}
+    )["locator"] == "docs/Padded.md"
 
 
 def test_file_locator_normalizes_backslashes(svc):
@@ -395,11 +412,11 @@ def test_verify_opaque_kind_is_skipped(svc):
     assert "opaque references" in result[0]["detail"]
 
 
-def test_whitespace_rejected_for_structured_kinds(svc):
+def test_whitespace_rejected_for_url_and_git_kinds(svc):
     for kind, locator in (
-        ("file", "with space.txt"),
         ("url", "https://example.com/a b"),
         ("git_branch", "feature/foo bar"),
+        ("git_commit", "abc 123"),
     ):
         with pytest.raises(InvalidArgument):
             svc.call("artifact.create", {"kind": kind, "locator": locator})

@@ -176,6 +176,23 @@ error           冲突或无法恢复（保留现场，doctor 报 error）
 
 两者都可删除重建，**不是**数据源；任何逻辑不得以它们为准。
 
+### 3.1 读取即校验（V1-A.1 起）
+
+```text
+get_raw / list_raw / load_raw   ->  读字节，不校验 rev
+load_model / list_models         ->  强制 verify_rev(record)
+```
+
+对象文件被手改、Git merge 或冲突解决动过之后，**读取时**就报 `PROJECT_CORRUPTED`，
+而不是等到下一次写入把内容「洗白」（重算一个 rev 签上名，掩盖掉篡改）。
+这对 V1-B 尤其重要：Git Adapter 一旦开始介入，`.pjt` 被外部修改的概率大幅上升。
+
+两处刻意例外：
+
+- `doctor` 用 `check_rev=False` —— 数据已经损坏时诊断本身必须还能跑完并指出是哪条；
+- `resolve_actor` 用 `check_rev=False` —— 解析 actor 是尽力而为的记账问题，
+  一个坏掉的 member 对象不该让 `ServiceContext` 构造失败（否则 `doctor` 也起不来）。
+
 ## 8. 数据完整性（pjt doctor）
 
 ```text

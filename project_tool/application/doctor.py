@@ -258,7 +258,9 @@ def run_doctor(ctx) -> dict[str, Any]:
 
     # ------------------------------------------------------------- dependencies
     try:
-        tasks = {task.id: task for task in ctx.store.list_models("task")}
+        # check_rev=False：doctor 必须能在 rev 已损坏时把对象读出来，否则第一条坏数据
+        # 就让诊断崩掉。rev 本身由上面的 objects.<type> 检查逐条报告。
+        tasks = {task.id: task for task in ctx.store.list_models("task", check_rev=False)}
     except ProjectToolError as exc:
         tasks = {}
         add("dependencies", "error", f"cannot load tasks: {exc.message}")
