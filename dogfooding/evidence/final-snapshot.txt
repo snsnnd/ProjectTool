@@ -1,0 +1,114 @@
+===== FINAL SNAPSHOT (real EFW project, no corruption) =====
+--- pjt status ---
+EFW Studio  (PRJ-01M3R9F6DT0JFPXH0M417888MC, active)
+
+Active milestone  页面内模型编辑 ░░░░░░░░░░░░░░░░░░░░ 0%
+  inbox=5
+
+Tasks  inbox 14  done 1
+
+Computed blocked
+  TSK-01M3R9MD  通信页行内编辑（信号/事件/队列增删改）
+    waiting for TSK-01M3R9M6
+  TSK-01M3R9MW  数据流页句子行内编辑与拖动排序
+    waiting for TSK-01M3R9M6
+  TSK-01M3R9PK  真机 hash 不一致提示与 observe_port 模板实机验证
+    waiting for TSK-01M3R9P6
+  TSK-01M3R9R9  打包发布 smoke test（安装包启动完整链路）
+    waiting for TSK-01M3R9Q5, TSK-01M3R9QW
+
+Members
+  jichao         5 active  (doing 0, blocked 0)
+
+Recent activity
+  2026-09-30 12:48  TSK-01M3R9ST  task.status_changed  review → done
+  2026-09-30 12:48  TSK-01M3R9ST  task.status_changed  doing → review
+  2026-09-30 12:48  TSK-01M3R9ST  task.status_changed  ready → doing
+  2026-09-30 12:42  DEC-01M3R9Y9  decision.created  Electron 主进程以 stdio 启动
+studio_core.server，而不是内嵌 HTTP
+  2026-09-30 12:42  DEC-01M3R9XT  decision.created  Studio CLI 与 GUI 
+继续共享同一个 Service/Core
+  2026-09-30 12:42  DEC-01M3R9XK  decision.created  ProjectTool 只嵌入 
+new/efw，不初始化整个 framework 仓库
+  2026-09-30 12:41  UPD-01M3R9X4  update.created  确认 desktop/ 与 scripts/ 
+为空，打包链路未闭合；先重建主进程桥。
+  2026-09-30 12:41  UPD-01M3R9WK  update.created  store 目前只有 
+open/refresh/create，模型编辑缺少统一保存通路；通信页编辑依赖该通路。
+  2026-09-30 12:41  UPD-01M3R9W4  update.created  已确认 serial/tcp 
+传输只有实现没有集成测试；回环方案可行。
+  2026-09-30 12:41  TSK-01M3R9PK  task.dependency_added  depends on TSK-01M3R9P6
+
+--- pjt doctor ---
+  OK      project              EFW Studio (PRJ-01M3R9F6DT0JFPXH0M417888MC), 
+schema 1.0, rev ok
+  OK      objects.goal         1 goal object(s)
+  OK      objects.milestone    4 milestone object(s)
+  OK      objects.task         15 task object(s)
+  OK      objects.member       1 member object(s)
+  OK      objects.update       3 update object(s)
+  OK      objects.decision     3 decision object(s)
+  OK      objects.link         0 link object(s)
+  OK      references           all references valid
+  OK      dependencies         15 task(s), no cycles
+  OK      hierarchy            goal/task/decision hierarchies acyclic
+  OK      members              1 member(s)
+  OK      events               36 event(s)
+  OK      events.chain         base_rev/new_rev chains consistent with objects
+  OK      transactions         no pending transactions
+  OK      write.lock           no active write lock
+  OK      refs.labels          labels ref present
+  OK      state                derived state present
+
+OK  objects=27 events=36 errors=0 warnings=0 repairable=0
+
+--- pjt log (last 15) ---
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  review → done
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  doing → review
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  ready → doing
+2026-09-30 12:42  DEC-01M3R9Y9 decision.created  Electron 主进程以 stdio 启动 
+studio_core.server，而不是内嵌 HTTP
+2026-09-30 12:42  DEC-01M3R9XT decision.created  Studio CLI 与 GUI 
+继续共享同一个 Service/Core
+2026-09-30 12:42  DEC-01M3R9XK decision.created  ProjectTool 只嵌入 
+new/efw，不初始化整个 framework 仓库
+2026-09-30 12:41  UPD-01M3R9X4 update.created  确认 desktop/ 与 scripts/ 
+为空，打包链路未闭合；先重建主进程桥。
+2026-09-30 12:41  UPD-01M3R9WK update.created  store 目前只有 
+open/refresh/create，模型编辑缺少统一保存通路；通信页编辑依赖该通路。
+2026-09-30 12:41  UPD-01M3R9W4 update.created  已确认 serial/tcp 
+传输只有实现没有集成测试；回环方案可行。
+2026-09-30 12:41  TSK-01M3R9PK task.dependency_added  depends on TSK-01M3R9P6
+2026-09-30 12:41  TSK-01M3R9R9 task.dependency_added  depends on TSK-01M3R9QW
+2026-09-30 12:41  TSK-01M3R9R9 task.dependency_added  depends on TSK-01M3R9Q5
+2026-09-30 12:40  TSK-01M3R9MW task.dependency_added  depends on TSK-01M3R9M6
+2026-09-30 12:40  TSK-01M3R9MD task.dependency_added  depends on TSK-01M3R9M6
+2026-09-30 12:40  TSK-01M3R9ST task.created  完成 ProjectTool dogfooding 
+第一轮记录与报告
+next_cursor EVT-01M3R9STY3QDKBPS2AZCR4D9DC
+
+--- pjt graph tasks ---
+Tasks
+├── TSK-01M3R9M6 inbox  store.updateModel 保存通路（revision + 诊断）
+├── TSK-01M3R9MD inbox  通信页行内编辑（信号/事件/队列增删改）  (blocked by 
+│   TSK-01M3R9M6)
+├── TSK-01M3R9MW inbox  数据流页句子行内编辑与拖动排序  (blocked by 
+│   TSK-01M3R9M6)
+├── TSK-01M3R9NE inbox  状态机页编辑（加状态/转换/条件）
+├── TSK-01M3R9NY inbox  删除对象前的引用检查（信号/数据流/事件）
+├── TSK-01M3R9P6 inbox  serial/tcp 回环集成测试（socat/pty）
+├── TSK-01M3R9PK inbox  真机 hash 不一致提示与 observe_port 模板实机验证  
+│   (blocked by TSK-01M3R9P6)
+├── TSK-01M3R9Q5 inbox  重建 desktop 主进程与 preload 白名单桥
+├── TSK-01M3R9QN inbox  修复 package.json 脚本与 electron-builder 资源路径
+├── TSK-01M3R9QW inbox  PyInstaller 后端打包脚本与 backend-bin 产物
+├── TSK-01M3R9R9 inbox  打包发布 smoke test（安装包启动完整链路）  (blocked by 
+│   TSK-01M3R9Q5, TSK-01M3R9QW)
+├── TSK-01M3R9RX inbox  ProcTransport.close 资源泄漏与测试 ResourceWarning
+├── TSK-01M3R9SC inbox  efw.h 聚合 msgq.h / efw_all.c 收录 msgq.c
+├── TSK-01M3R9SM inbox  源码草稿持久化（崩溃恢复）
+└── TSK-01M3R9ST done  完成 ProjectTool dogfooding 第一轮记录与报告
+  TSK-01M3R9MD depends_on TSK-01M3R9M6
+  TSK-01M3R9MW depends_on TSK-01M3R9M6
+  TSK-01M3R9PK depends_on TSK-01M3R9P6
+  TSK-01M3R9R9 depends_on TSK-01M3R9Q5, TSK-01M3R9QW
+15 task(s), 5 edge(s)

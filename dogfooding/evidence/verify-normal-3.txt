@@ -1,0 +1,63 @@
+=== lifecycle T15: ready -> doing -> review -> done ===
+TSK-01M3R9STT2H50SBM75BSW6P62P -> doing
+TSK-01M3R9STT2H50SBM75BSW6P62P -> review
+TSK-01M3R9STT2H50SBM75BSW6P62P -> done
+
+=== task history T15 ===
+2026-09-30 12:40  TSK-01M3R9ST task.created  完成 ProjectTool dogfooding 
+第一轮记录与报告
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  ready → doing
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  doing → review
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  review → done
+
+=== log --task T15 ===
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  review → done
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  doing → review
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  ready → doing
+2026-09-30 12:40  TSK-01M3R9ST task.created  完成 ProjectTool dogfooding 
+第一轮记录与报告
+
+=== log --member jichao (first 6) ===
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  review → done
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  doing → review
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  ready → doing
+2026-09-30 12:42  DEC-01M3R9Y9 decision.created  Electron 主进程以 stdio 启动 
+studio_core.server，而不是内嵌 HTTP
+2026-09-30 12:42  DEC-01M3R9XT decision.created  Studio CLI 与 GUI 
+
+=== log --type task.status_changed ===
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  review → done
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  doing → review
+2026-09-30 12:48  TSK-01M3R9ST task.status_changed  ready → doing
+
+=== log --since 1d (count) ===
+2026-09-30 12:34  PRJ-01M3R9F6 project.initialized  EFW Studio
+
+=== member workload jichao ===
+jichao  计超  (MBR-01M3R9H2TQJ9EB5G5ARPAJN7HE)
+  total 6 task(s)
+
+  done (1)
+    TSK-01M3R9ST  完成 ProjectTool dogfooding 第一轮记录与报告
+
+  inbox (5)
+    TSK-01M3R9M6  store.updateModel 保存通路（revision + 诊断）
+    TSK-01M3R9MD  通信页行内编辑（信号/事件/队列增删改）
+    TSK-01M3R9P6  serial/tcp 回环集成测试（socat/pty）
+    TSK-01M3R9Q5  重建 desktop 主进程与 preload 白名单桥
+    TSK-01M3R9QW  PyInstaller 后端打包脚本与 backend-bin 产物
+
+=== milestone progress M1 ===
+░░░░░░░░░░░░░░░░░░░░ 0%  (0/13 weight)
+
+=== updates linked to T6 ===
+UPD-01M3R9W4  2026-09-30 12:41  已确认 serial/tcp 
+传输只有实现没有集成测试；回环方案可行。
+
+=== task show T15 ===
+TSK-01M3R9STT2H50SBM75BSW6P62P  完成 ProjectTool dogfooding 第一轮记录与报告
+  status=done  priority=normal  weight=1  lifecycle=active
+  owners     MBR-01M3R9H2
+  labels     process
+  started    2026-09-30 12:48
+  completed  2026-09-30 12:48

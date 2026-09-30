@@ -1,0 +1,409 @@
+diff --git a/new/efw/.gitignore b/new/efw/.gitignore
+index 6a1a421..795fd18 100644
+--- a/new/efw/.gitignore
++++ b/new/efw/.gitignore
+@@ -12,3 +12,7 @@ playwright-report/
+ examples/*/generated/
+ examples/*/.efw/generated.json
+ examples/*/.efw/backups/
++
++# Project Tool local state
++.pjt/local/
++.pjt/transactions/
+diff --git a/new/efw/AGENTS.md b/new/efw/AGENTS.md
+index 2c9bcac..b5d173a 100644
+--- a/new/efw/AGENTS.md
++++ b/new/efw/AGENTS.md
+@@ -1,7 +1,8 @@
+ # AGENTS.md — EFW Studio 交接文档
+ 
+-> 给下一位接手的 agent / 开发者。先读本篇，再按需读 `docs/01`–`docs/04` 设计文档。
++> 给下一位接手的 agent / 开发者。先读本篇，再按需读 `docs/01`–`docs/05` 设计文档。
+ > 工作目录：`new/efw/`（旧目录 `../../` 的 Studio 已废弃，仅供参考，不要复制旧模型）。
++> 当前工作已提交 git：分支 `tmp/new`，commit `2cb4a74`（"Add new EFW Studio: model, codegen, virtual debug and web UI"）。仓库根目录还有与本工作室无关的历史改动，未触碰。
+ 
+ ## 0. 一句话定位
+ 
+@@ -9,73 +10,94 @@
+ 
+ ## 1. 给下个 agent 的最重要八条
+ 
+-1. 后端核心已完成：`studio_core/`。UI 七个页面（欢迎/总览/数据流/状态机/通信/代码/调试/生成）全部可用，风格规范见 `docs/05-ui-style.md`。`ui/App.tsx` 的 `READY` 列表控制哪些导航可用。
+-2. 测试现状：`26` 个后端测试全绿、`11` 条浏览器回归全过（第 6 节问题均已修复，仅作历史记录）。
+-3. 只用 `uv` 管理 Python：`uv sync`、`uv run python ...`。新增依赖先确认必要（目前唯一第三方是 `pyserial`，用于真机串口）。
++1. 端到端可用：`studio_core/` + `ui/` 七个导航页面（总览 / 数据流 / 状态机 / 通信 / 代码 / 调试 / 生成）全部实现；风格规范 `docs/05-ui-style.md`。**下一步主线是“页面内模型编辑”**（见第 7 节），即把浏览页（数据流 / 状态机 / 通信）变成结构化编辑器。
++2. 测试：`26` 个后端测试全绿、`11` 条浏览器回归全过。任何改动后按第 8 节跑全套。
++3. 只用 `uv` 管理 Python：`uv sync`、`uv run python ...`。唯一第三方依赖是 `pyserial`（真机串口）。
+ 4. 模型 id 必须匹配 `^[a-z][a-z0-9_]{0,23}$`；中文只出现在 `label` 里。生成的 C 标识符由 id 直接决定，创建后不可改。
+-5. 生成器输出只写 `generated/`；`src/`、`board/` 永远由用户拥有，生成/调试构建都不得写入。已有“预览 → token → 提交”与手改冲突保护，不要绕过。
+-6. 执行计划只有一个事实来源：`studio_core/model.py:analyze()` 产出 plan，`studio_core/codegen.py` 按同一模型生成，UI 只展示，不得自行推导调度。
++5. 生成器输出只写 `generated/`；`src/`、`board/` 永远由用户拥有。已有“预览 → token → 提交”与手改冲突保护，不要绕过。
++6. 执行计划只有一个事实来源：`studio_core/model.py:analyze()` 产出 plan，`studio_core/codegen.py` 按同一模型生成，UI 只展示，不得自行推导调度、内存或关系。
+ 7. 调试协议是文本命令（主机→目标）+ JSON 行（目标→主机），见 `docs/04`。虚拟目标与真机共用 `studio_core/debug.py` 的会话层，不要为真机另写一套。
+-8. 根目录残留上一版前端的脚手架（`package.json` / `node_modules` / `tsconfig.json` / `vite.config.ts`，`scripts/` 已空）。重建 UI 时可复用依赖；`package.json` 里的 `main: desktop/main.mjs`、`dev`、`package` 等脚本指向已删除文件，需要重建时才修。
++8. 前端不再是脚手架：`ui/` 是正式界面；但 `package.json` 的 `main: desktop/main.mjs`、`start`、`test:bridge`、`package:backend` 仍指向不存在的 `desktop/`、`scripts/`，做 Electron 壳与打包时再修（`scripts/` 目录为空）。
+ 
+ ## 2. 已验证可用的能力（不要重复实现）
+ 
+ | 能力 | 入口 | 验证方式 |
+ | --- | --- | --- |
+-| 模型校验 + 结构化诊断（`at` / `message` / `hint`） | `model.validate` / `model.analyze` | `tests/test_core.py::ModelTests`（已通过） |
++| 模型校验 + 结构化诊断（`at` / `message` / `hint`） | `model.validate` / `model.analyze` | `ModelTests` 通过 |
+ | 四个模板（thermostat / traffic / sampler / blank） | `templates.build` | 全部通过校验；生成的 C 可编译运行 |
+-| C 代码生成（app.h / app_core.c / app_virtual.c / manifest.json / efw_app.cmake） | `codegen.generate` | 手工端到端：`-DAPP_VIRTUAL` 编译运行，快照/事件/参数整定/force 全部工作 |
+-| 项目操作（create/open/save/read/write/create 文件、路径防越界、符号链接拒绝） | `project.py` | `ProjectTests` 大部分通过 |
+-| 生成所有权（预览 Diff、token、备份、冲突阻止、额外文件保留） | `project.preview/commit` | `ProjectTests` 通过 |
+-| 用户函数缺失/签名不符检测（正则解析 `.c` 定义） | `model.find_definitions` + `analyze` | `ModelTests` 通过 |
+-| 调试会话：virtual / serial / tcp / replay，录制到 `.efw/runs/*.jsonl` | `debug.py`、`service.debug_start` | 手工运行 thermostat 曲线正常；会话测试因一个 bug 暂挂（见 6.2） |
+-| JSON Lines 服务 + CLI | `server.py`、`cli.py` | `ServiceTests.test_stdio_server_round_trip` 通过 |
+-| C 运行库契约 | `tests/msgq_contract.c`、`tests/scheduler_contract.c` | 独立编译运行通过（cc -std=c99 -Wall -Wextra） |
++| C 代码生成（app.h / app_core.c / app_virtual.c / manifest.json / efw_app.cmake） | `codegen.generate` | `GeneratedCTests`：虚拟与真机目标在 `-Wall -Wextra -Werror` 下零告警 |
++| 可整定信号回显（`app_tsig_t` 含 getter，`params` 帧包含信号） | `codegen` + `debug` | `BehaviourTests.test_tunable_signal_value_is_echoed_in_params` |
++| 项目操作（CRUD、源码读写、路径防越界、符号链接拒绝） | `project.py` | `ProjectTests` 通过 |
++| 生成所有权（预览 Diff、token、备份、冲突阻止、额外文件保留） | `project.preview/commit` | `ProjectTests` + 生成页浏览器回归 |
++| 源码模板保护（`EFW USER BEGIN/END`，标记外只读） | `source_template.py` + `file.write` | `test_template_regions_are_protected`、`test_missing_function_is_added_with_protected_template`、代码页回归 |
++| 用户函数缺失/签名不符检测 | `model.find_definitions` + `analyze` | `ModelTests` 通过 |
++| 调试会话：virtual / serial / tcp / replay，录制到 `.efw/runs/*.jsonl` | `debug.py`、`service.debug_start` | `SessionTests`（录制回放、live/hash 不一致、构建错误）+ 调试页回归 |
++| 虚拟目标构建缓存 | `debug.build_virtual`（`.efw/build/<key>/`） | 键 = 模型哈希 + 用户源码摘要；改 codegen 后手工删缓存 |
++| JSON Lines 服务 + CLI | `server.py`、`cli.py` | `ServiceTests` 通过 |
++| C 运行库契约 | `tests/msgq_contract.c`、`tests/scheduler_contract.c` | 编译运行通过（cc -std=c99 -Wall -Wextra） |
++| React UI + 开发桥 | `ui/`、`tools/bridge.mjs` | 11 条 Playwright 回归；Monaco/worker 本地打包、无 CDN |
+ 
+ ## 3. 目录与职责
+ 
+ ```
+ new/efw/
+   docs/01-product.md        五个概念、目录约定、非目标（先读这个）
+-  docs/02-model.md          efw.json 字段、步骤类型、语义规则
+-  docs/03-runtime.md        运行时依赖、生成文件、用户函数签名、内存估算
+-  docs/04-debug-and-api.md  调试帧协议、服务方法表、界面结构
++  docs/02-model.md          efw.json 字段、步骤类型、语义规则、通信页消费字段
++  docs/03-runtime.md        运行时依赖、生成文件、用户函数签名、源码模板、内存估算
++  docs/04-debug-and-api.md  调试帧协议、服务方法表、各界面已实现的行为
++  docs/05-ui-style.md       界面风格、token、每页交互约定、代码组织
+   runtime/                  EFW C 框架副本（唯一沿用旧代码的部分）
+-    include/efw/core/msgq.h 新增：静态消息队列（容量/丢包统计/ISR 钩子）
++    include/efw/core/msgq.h 静态消息队列（容量/丢包统计/ISR 钩子）
+     src/core/msgq.c
+-    src/core/scheduler.c    已修：tick 参数=绝对毫秒（旧版重复累加已删）
++    src/core/scheduler.c    tick 参数=绝对毫秒
+     include/efw/core/common.h 已补 <stdbool.h>
+   studio_core/
+     model.py     模型校验 / 分析 / 函数签名 / 可整定量 / 内存估算
+-    codegen.py   生成 C 与 manifest（含观测层 APP_OBSERVE_ENABLE、虚拟仿真层）
+-    templates.py 四个配方 + 骨架生成（stub）
+-    source_template.py  源码模板标记：fixed_parts / check_edit / protect_function
++    codegen.py   生成 C 与 manifest（观测层 APP_OBSERVE_ENABLE、虚拟仿真层）
++    templates.py 四个配方 + 带模板标记的骨架生成
++    source_template.py  fixed_parts / check_edit / protect_function
+     fsutil.py    ServiceError / safe_path / atomic_write / digest
+     project.py   项目 CRUD、源码读写（含 add_functions）、analyze、stub、预览→提交
+     debug.py     传输层（Proc/Serial/Tcp/Replay）、Session、Recorder、虚拟构建
+     service.py   调度表（UI 与 CLI 共用）
+     server.py    stdio JSON Lines 服务（stdout 只输出协议）
+     cli.py       new / check / preview / generate / run
+-  ui/                       React 界面；见 docs/05-ui-style.md 与第 9 节
++  ui/
++    App.tsx / main.tsx / store.tsx / rpc.ts / types.ts
++    debug.ts     调试通知归约（帧 → 界面状态）
++    template.ts  源码模板标记解析（与后端同规则）
++    monaco.ts    编辑器与 Diff 共用的 Monaco 初始化
++    pages/       七个页面，每页一个文件
++    components/  SourceEditor / CurveChart / DiffView
++    styles/      tokens.css（唯一颜色来源）+ app.css
+   tools/bridge.mjs          开发期 RPC/SSE 桥（Vite 中间件）
+-  tests/test_core.py         26 个测试（模型 / 生成 / 行为 / 项目 / 调试会话 / 服务）  tests/ui/*.spec.ts         Playwright 回归（9 条）
++  tests/test_core.py         26 个测试（模型 / 生成 / 行为 / 项目 / 调试会话 / 服务）
++  tests/ui/*.spec.ts         Playwright 回归（11 条）
+   tests/*_contract.c         C 契约测试
+-  pyproject.toml + uv.lock   uv 管理；pyserial
+-  package.json 等            上一版前端残留（见第 1 节第 8 条）
++  playwright.config.ts       自动启动 Vite；测试自建临时项目并清理
++  pyproject.toml + uv.lock   uv 管理；pyserial；packaging 组留给 PyInstaller
++  package.json               React/Vite/Monaco/Playwright 依赖；含少量待修脚本（见第 1 节第 8 条）
+ ```
+ 
+ ## 4. 常用命令
+ 
+ ```bash
+ cd new/efw
+-uv sync                                  # 环境（服务只用标准库 + pyserial）
+-uv run python -m unittest discover -s tests -p 'test_*.py'   # 全部测试
++uv sync
++uv run python -m unittest discover -s tests -p 'test_*.py'   # 全部后端测试
+ uv run python -m studio_core.cli new /tmp/app --template thermostat
+ uv run python -m studio_core.cli check /tmp/app
+ uv run python -m studio_core.cli generate /tmp/app
+ uv run python -m studio_core.cli run /tmp/app --ms 8000 --set target=45 --fire overheat
+ # C 契约（无需 cmake）：
+ cc -std=c99 -Wall -Wextra -Iruntime/include tests/msgq_contract.c runtime/src/core/msgq.c -o /tmp/m && /tmp/m
++
++# UI（本机 WSL 没有 Linux 版 node，先准备临时 node，见第 9 节）
++export PATH=/tmp/opencode/node/bin:$PATH
++node node_modules/typescript/bin/tsc --noEmit          # 类型检查
++node node_modules/vite/bin/vite.js                     # 开发服务器 127.0.0.1:5173
++node node_modules/@playwright/test/cli.js test          # 浏览器回归（自动起 Vite）
++node node_modules/vite/bin/vite.js build               # 生产构建
+ ```
+ 
+ `EFW_CC` 指定编译器；`EFW_RUNTIME` 覆盖 runtime 路径（打包用）。
+@@ -84,94 +106,90 @@ cc -std=c99 -Wall -Wextra -Iruntime/include tests/msgq_contract.c runtime/src/co
+ 
+ - **五个概念**：输入/输出（硬件）、信号（带类型的共享值）、数据流（周期 + 句子式步骤）、状态机（决定哪些数据流运行）、事件/队列（消息池）。不要向用户暴露“节点/端口/连线/契约/Topic/发布订阅”。
+ - **文件所有权**：`src/`、`board/` 用户所有；`generated/`、`.efw/` 工具所有。覆盖必须先预览 + token 校验；手改的生成文件视为冲突。
++- **源码模板**：工具创建/补充的 `.c` 只在 `EFW USER BEGIN/END` 内可编辑；没有标记的既有文件不受限；不要给用户已有文件擅自加标记。前端（`ui/template.ts`）与 `file.write`（`check_edit`）双重校验，错误码 `TEMPLATE`。
+ - **生成代码规则**：只依赖 `scheduler.c` / `diagnostic.c` / `msgq.c`；无 malloc；`app_tick(now_ms)` 收绝对毫秒；用户函数签名在 `app.h` 声明，由编译器强制。
+-- **单事实来源**：调度计划、内存估算、可整定量都出自 `model.analyze`，UI 不得自行推导。
+-- **可观测性是默认能力**：`manifest.json` + 文本命令协议；`APP_OBSERVE_ENABLE=0` 可整体关闭；关闭时也能编译（当前有告警 bug，见 6.1）。
++- **单事实来源**：调度计划、内存估算、可整定量、引用关系都出自 `model.analyze`，UI 不得自行推导。
++- **可观测性是默认能力**：`manifest.json` + 文本命令协议；`APP_OBSERVE_ENABLE=0` 可整体关闭且零告警编译。
+ - **虚拟目标优先**：`board/` 不参与虚拟构建，仿真输入来自模型 `inputs[].sim`（const/sine/ramp/square/noise/follow）；同一份 `src/` 在电脑上可跑。真机只换传输层。
++- **契约同步**：改服务方法/帧字段时同步 `docs/04`、`ui/types.ts`、`ui/debug.ts`；改模型字段时同步 `docs/02`。
+ - **错误风格**：后端只抛 `ServiceError(code, message)`；消息要可读、可行动（如“周期 7ms 不是节拍 1ms 的整数倍，改成 8”）。
+ - **路径安全**：一切文件操作走 `fsutil.safe_path` / `source_path`；拒绝 `..`、绝对路径、反斜杠、符号链接。
+ 
+-## 6. 当前失败清单（含根因与建议修法）
++## 6. 历史问题与修复记录（全部已修复，仅作参考）
+ 
+-运行：`uv run python -m unittest discover -s tests -p 'test_*.py'`
++### 6.1 生成代码未使用符号告警（已修）
+ 
+-### 6.1 生成代码的未使用符号告警（6 个失败，属代码生成卫生问题）
++采用方案 A：`codegen.gen_core` 输出 `APP_MAYBE_UNUSED`（GNU 为 `__attribute__((unused))`），观测辅助函数与 `g_params` / `g_tsigs` / `g_m_*_trs` / `g_hist_*` 全部注解；虚拟层 `sim_rand` 单独加 `__attribute__((unused))`。现在 `test_observe_can_be_compiled_out` 与 `test_virtual_and_real_target_builds_are_warning_free` 全绿。
+ 
+-症状（`-Wall -Wextra -Werror` 下编译失败）：
++### 6.2 Recorder 初始化顺序（已修）
+ 
+-- `traffic`：`obs_i` 未使用（该配方没有 int 信号）。
+-- `blank`：`obs_flow`、`record_trans`、`obs_i` 未使用（无数据流/无状态机/无 int 信号）。
+-- `APP_OBSERVE_ENABLE=0` 时：`g_params`、`g_tsigs`、`g_m_light_trs`、`g_hist_r` 未使用。
+-- `blank` 项目 `-Werror` 下同类告警。
++`debug.py:Recorder.__init__` 在 `write()` 之前先设 `self.last_flush`。
+ 
+-根因：观测层辅助函数与参数表是无条件生成的 `static`，但只在特定模型/观测开启时被引用。
++### 6.3 blank 项目缺 `src/`（已修）
+ 
+-建议修法（二选一，推荐 A）：
++`project.create_project` 先建 `src/` 与 `board/` 目录。
+ 
+-- A. 在 `codegen.gen_core` 头部输出可移植的未使用属性宏，并给观测辅助函数与表加注解：
+-  ```c
+-  #if defined(__GNUC__)
+-  #define APP_MAYBE_UNUSED __attribute__((unused))
+-  #else
+-  #define APP_MAYBE_UNUSED
+-  #endif
+-  ```
+-  注解对象：`obs_u/obs_i/obs_f/obs_flow/obs_queue/obs_ack/obs_hello/obs_snapshot/obs_params/record_trans`、`g_params`、`g_tsigs`、`g_m_*_trs`、`g_hist_w/g_hist_r`、`g_mach_*` 表。MSVC 无此告警级别时可留空。
+-- B. 按需生成：`obs_i` 仅当存在 int 信号；`obs_flow` 仅当有数据流；`record_trans`/历史环/`g_m_*_trs` 整体包进 `#if APP_OBSERVE_ENABLE`，`m_*_goto` 里的 `record_trans` 调用同样包 `#if`；`g_params/g_tsigs` 包进观测块。更省 Flash，但 `gen_core` 分支变多。
+-- 修完后 `test_observe_can_be_compiled_out`、`test_virtual_and_real_target_builds_are_warning_free` 应全绿。
++### 6.4 两个测试预期（已修）
+ 
+-### 6.2 `Recorder.__init__` 顺序 bug（1 个 error）
++thermostat 运行窗口 12s→18s；traffic 转换时刻 3001/6002→3000/6000，黄灯窗口改 6500ms。
+ 
+-`studio_core/debug.py`：`Recorder.__init__` 先调用 `self.write(...)`，但 `self.last_flush` 在 `write()` 里被读取、之后才赋值 → `AttributeError`。
+-修法：在调用 `write` 前先 `self.last_flush = time.monotonic()`（或 `0.0`）。修好后 `test_virtual_session_record_and_replay` 应能跑通。
++### 6.5 仍未处理的小问题
+ 
+-### 6.3 blank 项目没有 `src/` 目录（1 个 error，产品性问题）
++- 测试有 `ResourceWarning: unclosed file`：`ProcTransport.close` 建议同时关 `stdout/stderr`；测试的 `run_virtual` 可用 `with`/try-finally。保持输出干净（见第 8 节）。
++- `efw.h` 未聚合 `core/msgq.h`，`efw_all.c` 未包含 `core/msgq.c`；Keil 单编译单元用户暂时用不了消息队列。生成应用不受影响。
++- `pyproject.toml` 的 `packaging` 依赖组保留给将来的 PyInstaller 打包，尚未使用。
++- 源码草稿只在内存：刷新/崩溃会丢；顶栏没有保存/撤销/重做（代码页的“保存文件”是唯一写盘入口）。
+ 
+-`project.create_project` 只写入模板里的文件，`blank` 模板没有 src 文件，因此 `src/` 不存在；测试里对 `src/link` 建符号链接报 `FileNotFoundError`。
+-修法（推荐产品侧）：`create_project` 在写文件前 `mkdir` 出 `src/` 与 `board/`（可各放一个 `.gitkeep`），保证界面上“新建源码/回调骨架”总有落点，也符合 `docs/01` 的目录约定。修完后 `test_paths_are_confined` 通过。
++## 7. 下一步路线（按优先级）
+ 
+-### 6.4 两个测试预期需要修正（代码本身正确）
++### 7.1 页面内模型编辑（主线，下一步）
+ 
+-- `test_thermostat_closes_the_loop_then_trips_and_recovers`：trip 发生在约 9.9s（target=90、follow 仿真 tau=4000ms、75°C 阈值），12s 的窗口不足以等到 `recover`（+4000ms）。把运行时长改为 `18000`（或提高 `gain`/降低阈值）即可；不要改状态机代码。
+-- `test_traffic_light_is_pure_state_machine`：`after_ms 3000` 在 `t=3000` 正好触发（初始状态 entered at 0），预期应改为 `(3000, 'green'), (6000, 'yellow')`，不是 3001/6002。
++目标：数据流 / 状态机 / 通信页从只读浏览变成结构化编辑器；`efw.json` 文本编辑保留，两者共用同一模型。
+ 
+-### 6.5 其它小问题（非失败）
++- store 增 `updateModel(fn)`：改内存模型 → `project.save`（带 revision）→ `refresh`；失败（冲突/校验）保留原模型并用诊断条提示。
++- 各页交互由简到繁：通信页（行内编辑 + 增删信号/事件/队列）→ 数据流页（句子行内编辑、拖动排序、步骤参数）→ 状态机页（加状态、加“当…时从…到…”、改条件）。
++- id 由工具生成（`^[a-z][a-z0-9_]{0,23}$`），创建后不可改；删除对象前检查引用（信号被步骤读写、数据流被状态 `run`、事件被转换消费），有引用时先提示再删或禁止删。
++- 校验只消费 `project.analyze`；编辑态视觉约定先扩展 `docs/05`（行内编辑、确认删除、不做自由画布），测试按 `data-id`/`data-key` 定位而不是中文 label。
++- 完成后，总览页“下一步”可以变成可点击的修复入口。
+ 
+-- 测试有 `ResourceWarning: unclosed file`：`ProcTransport.close` 只关了 stdin 子进程，建议同时 `self.p.stdout.close()` / `self.p.stderr.close()`；测试的 `run_virtual` 也应使用 `with` 或 try/finally 关闭。保持测试输出干净，便于将来用 `-W error`。
+-- `efw.h` 未聚合 `core/msgq.h`，`efw_all.c` 未包含 `core/msgq.c`。生成应用直接包含/编译这两个文件，所以现在不影响；若要让 Keil 单编译单元用户也能用消息队列，需把 `msgq.c` 加进 `efw_all.c`（注意 `same_name` 重命名惯例）并在 `efw.h` 聚合。做出决定后同步 `docs/03`。
+-- `pyproject.toml` 里的 `packaging` 依赖组（PyInstaller）保留用于将来打包独立服务。
++### 7.2 真机链路
+ 
+-## 7. 下一步路线（按优先级）
++`serial` / `tcp` 传输已实现但未实测。用回环/伪终端（socat、pty）补集成测试；真机验证模型 hash 不一致提示（`SessionTests.test_live_transport_path_and_hash_mismatch` 已覆盖逻辑，缺硬件验证）与 `board/observe_port.c` 模板（已带 `EFW USER` 标记）。
++
++### 7.3 Electron 壳与打包
++
++`desktop/` 不存在，目前只有浏览器开发环境。主进程以 stdio 启动 `python -m studio_core.server`（或 PyInstaller 产物），把 `debug.frames` / `debug.status` 转 IPC；渲染进程只经受限 preload 调白名单方法；输出现已满足离线要求（Monaco worker 本地、无 CDN）。打包：`uv run --group packaging python -m PyInstaller` + electron-builder，修好 `package.json` 中的 `main`/`start`/`package:backend`。
++
++### 7.4 可选增强
+ 
+-1. **让测试全绿**：按第 6 节修 6.1–6.4（预计 1–2 小时），然后补一个“真机编译”冒烟测试：用模板生成 → 编译 `app_core.c` + `src/*.c` + `board/io.c` + `board/observe_port.c`（不含 main）验证可链接为一个静态库。
+-2. **重建 UI（主要工作）**：React + TypeScript + Vite；Electron 壳。页面：总览 / 数据流 / 状态机 / 通信 / 代码 / 调试 / 生成。设计语言见 `docs/04`（示波器式：中性石墨底 + 单一钴蓝、绿/黄/红只表示状态、等宽字体显示标识符、明暗跟随系统、1366×768 无横向滚动）。
+-   - 关键交互：步骤用“句子”编辑（读/滤波/PID/写），拖动排序；状态机用状态图 + “当…时从…到…”；通信页表格显示容量/内存；代码页 Monaco + 一键创建缺失函数；调试页曲线/任务统计/状态高亮/参数整定；生成页逐文件 Diff。
+-   - 桥接：Electron 主进程以 stdio 启动 `python -m studio_core.server`，把 `debug.frames` / `debug.status` 通知转 IPC；渲染进程只经受限 preload 调白名单方法。参考已废弃的旧实现思路可以，但**不要**复制旧节点画布模型。
+-3. **调试体验闭环**：虚拟目标播放/暂停/单步/变速已在服务端实现；UI 需要“运行”按钮直达虚拟调试、曲线叠加、转换历史时间线、录制列表与回放。
+-4. **真机链路**：串口（pyserial）与 TCP 传输已实现但未实测；用回环/伪终端补集成测试；真机验证 hash 不一致提示、`app_observe_write/read` 模板。
+-5. **打包**：`uv run --group packaging python -m PyInstaller` 打独立服务（保留旧脚本思路即可），Electron Builder 出安装包；离线要求：Monaco worker 本地、无 CDN。
+-6. **可选增强**：多速率独立采样（当前是路径级 max 周期）、数据流依赖图自动布局、`signal` 条件转换去抖（防两状态同时为真来回跳）、模型版本迁移。
++多速率独立采样（当前路径级 max 周期）、`signal` 条件转换去抖、数据流依赖图自动布局、模型版本迁移、撤销/重做、源码草稿持久化（localStorage 或 `.efw/`）。
+ 
+ ## 8. 验证习惯（要求）
+ 
+-- 任何生成器改动后必须跑：`unittest` 全套 + 手工 `cli run` 一次（确认快照/事件正确）。
++- 任何生成器改动后必须跑：`unittest` 全套 + 手工 `cli run` 一次（确认快照/事件/参数回显正确）。
+ - 新增 C 特性必须带主机契约测试（参照 `tests/msgq_contract.c`），并用 `-Wall -Wextra -Werror` 编译通过。
+-- 行为断言优先于字符串断言：优先用 `cli run`/调试会话的快照与事件验证，不要断言生成 C 的文本格式（除非是接口/宏名）。
+-- 每次改动更新 `docs/04` 的协议表与 `docs/02` 的字段表（单一事实来源）。
++- 行为断言优先于字符串断言：优先用 `cli run` / 调试会话的快照与事件验证，不要断言生成 C 的文本格式（除非是接口/宏名）。
++- UI 改动跑 `tsc --noEmit` + `@playwright/test` 全套；测试定位用稳定 id（`data-id`/`data-key`），不要用中文展示文案。
++- 每次改动更新对应文档：模型字段 → `docs/02`；协议与界面行为 → `docs/04`；风格与交互约定 → `docs/05`；本文件的第 6/7/9 节随状态更新。
+ 
+-## 9. UI 开发环境（已验证）
++## 9. UI 开发现状与环境（已验证）
+ 
+-- 本机 WSL 没有 Linux 版 node，而 `node_modules` 是 Linux 二进制。临时方案：下载 Linux node 到 `/tmp/opencode/node`，`export PATH=/tmp/opencode/node/bin:$PATH`，再 `node node_modules/typescript/bin/tsc --noEmit`、`node node_modules/vite/bin/vite.js`（开发）/ `... build`。
++### 运行环境
++
++- 本机 WSL 没有 Linux 版 node，`node_modules` 是 Linux 二进制。临时方案：下载 Linux node 到 `/tmp/opencode/node`，`export PATH=/tmp/opencode/node/bin:$PATH`，再执行第 4 节的 UI 命令。
++- Vite 7 要求 Node 20.19+ / 22.12+；当前临时 Node 22.11 可完成构建与测试但有版本提示，正式环境应升级。
+ - 开发时 `tools/bridge.mjs`（Vite 中间件）用 `uv run python -m studio_core.server` 提供 `POST /rpc` 与 `GET /events`（SSE）；界面只经 `ui/rpc.ts` 通信。
+-- 状态机页已完成只读浏览：切换状态机、状态图、详情、顺序转换规则、路径高亮。编辑与实时运行状态尚未接入。
+-- 通信页已完成：分类、搜索、配置表、信号/事件引用、队列策略、类别合计内存与诊断。引用和内存来自后端分析，无前端估算。
+-- 代码页已完成：本地按需加载 Monaco 与 worker、源码编辑/保存、新文件草稿、缺失函数骨架、revision 冲突提示。代码页保持挂载以保留跨页面草稿；草稿只在内存，尚无崩溃恢复。函数骨架需用户检查后保存。
+-- 源码模板已实现（`studio_core/source_template.py`）：工具创建的 `.c` 用 `/* EFW USER BEGIN <name> */` … `END` 标记用户逻辑区，标记外固定只读。代码页在标记外拦截按键/粘贴（`ui/template.ts` 与 `ui/components/SourceEditor.tsx`），`file.write` 用 `check_edit` 再校验（错误码 `TEMPLATE`），`add_functions` 负责追加带标记的骨架。无标记的旧文件不受限。
+-- `efw.json` 已列入代码页“应用配置”：编辑后保存走 `project.save`，各页面按新模型刷新。模型配置只以 `efw.json` 为准，不写进 `.c`。
+-- 调试页已完成：顶栏“运行”一键启动虚拟目标（有未保存源码草稿或模型错误时禁用，见 `ui/store.tsx` 的 `sourcesDirty`）；播放/暂停/单步/速度/重新开始/停止；曲线、任务统计、状态机、参数整定、事件/强制输入、队列；`.efw/runs/` 列表与回放。通知经 `onEvent` 归约（`ui/debug.ts`），帧字段见 `docs/04`。
+-- codegen 变更注意：可整定信号经 `app_tsig_t`（含 `get`）在 `params` 帧回发；表尾哨兵是 5 个字段。`build_virtual` 缓存键只看模型哈希与用户源码，改 `codegen.py` 后旧缓存不会自动失效，手工删 `.efw/build/` 即可。
+-- 生成页已完成：自动预览、逐文件 Diff（`ui/components/DiffView.tsx`，与编辑器共用 `ui/monaco.ts`）、token 提交、冲突阻止与恢复。
+-- 下一步 UI：真机串口/TCP 实测（回环/伪终端集成测试、hash 不一致提示）、Electron 壳与打包（`desktop/` 不存在，只有浏览器开发环境）、页面内模型编辑（当前只能手改 efw.json）。
+-- 浏览器回归：`node node_modules/@playwright/test/cli.js test`，由 `playwright.config.ts` 自动启动 Vite，测试创建临时真实项目并在结束后清理。当前 11 条测试覆盖状态机、通信页、代码页、调试页（草稿门禁、整定往返、事件触发、回放）与生成页（预览、提交、冲突恢复）。截图保存在忽略的 `test-results/`。
+-- 后端 `unittest` 26 条全绿，含 `ProjectTests.test_template_regions_are_protected`、`test_missing_function_is_added_with_protected_template` 与 `BehaviourTests.test_tunable_signal_value_is_echoed_in_params`。
+-- Vite 7 要求 Node 20.19+ 或 22.12+；当前临时 Node 22.11 可完成构建与测试但有版本提示，正式开发环境应升级到满足要求的版本。
++
++### 页面现状
++
++- 总览 / 数据流 / 状态机 / 通信：只读浏览，显示后端分析与诊断；**尚不能编辑**（见 7.1）。
++- 代码页：Monaco 按需加载，模板标记外只读（按键/粘贴拦截 + 保存端 `TEMPLATE` 校验）；新文件与函数模板先进草稿，保存后重新分析；`efw.json` 作为“应用配置”可整体编辑，保存后全页刷新。页面常驻以保留跨页草稿。
++- 调试页：顶栏“运行”启动虚拟目标（`sourcesDirty` 或模型错误时禁用）；播放/暂停/单步 500 ms/速度/重新开始/停止；曲线、任务统计、状态机、参数整定、事件/强制输入、队列、录制列表与回放。通知经 `ui/debug.ts` 归约。
++- 生成页：自动预览、逐文件 Monaco Diff、token 提交、冲突阻止与恢复。
++- 顶栏：项目名/路径、重新载入、运行（运行中变停止）；状态栏：诊断计数、目标连接占位、模型 hash。撤销/重做与“保存”按钮不存在。
++
++### 测试现状
++
++- 后端 `unittest` 26 条全绿；浏览器 `@playwright/test` 11 条全绿（状态机、通信、代码、调试、生成页）。
++- 测试创建临时真实项目（`/tmp`），结束后清理；截图保存在被忽略的 `test-results/`。
++- 注意：`build_virtual` 缓存键只看模型哈希与用户源码，修改 `codegen.py` 后旧缓存不会失效，开发时手工删 `.efw/build/`。
+diff --git a/new/efw/docs/03-runtime.md b/new/efw/docs/03-runtime.md
+index 26ed16e..b40c23d 100644
+--- a/new/efw/docs/03-runtime.md
++++ b/new/efw/docs/03-runtime.md
+@@ -60,6 +60,10 @@ efw_status_t count_fault(void) {
+ 
+ `analysis.memory` 给出估算：信号、参数、每步状态（滤波/PID/平均窗口）、事件队列、用户队列。所有存储在编译期确定，无 `malloc`。
+ 
++## 虚拟目标构建缓存
++
++`build_virtual` 把生成文件与可执行文件放在 `.efw/build/<key>/`，`key = 模型哈希 + 全部用户源码摘要`。因此：只改 `src/`/`board/` 或 `efw.json` 会得到新 key；**修改 `codegen.py` 不会让旧缓存失效**，开发调试生成器时要手工删除 `.efw/build/`。最多保留最近 7 份缓存。
++
+ ## 可观测性开销
+ 
+ 每个数据流一个 `run/miss/over/err/late/us` 统计（来自调度器）；每个队列 `n/push/drop/hw`；快照默认 200 ms 一帧，约 1 KB，115200 波特下约 45% 带宽；可用 `rate` 调整。
+diff --git a/new/efw/docs/04-debug-and-api.md b/new/efw/docs/04-debug-and-api.md
+index 079125d..6efedfd 100644
+--- a/new/efw/docs/04-debug-and-api.md
++++ b/new/efw/docs/04-debug-and-api.md
+@@ -21,15 +21,18 @@
+ 
+ ## 服务协议（JSON Lines over stdio）
+ 
+-请求 `{"id","method","params"}`；响应 `{"id","result"}` / `{"id","error":{"code","message"}}`；通知（无 id）`{"event":"debug.frames","session","frames":[...]}`、`{"event":"debug.status","session","state","t","message"}`。
++请求 `{"id","method","params"}`；响应 `{"id","result"}` / `{"id","error":{"code","message"}}`；通知（无 id）`{"event":"debug.frames","session","frames":[...]}`、`{"event":"debug.status","session","state","t","speed","message","warning?","end?"}`（`end` 仅回放）。
+ 
+ | 方法 | 作用 |
+ | --- | --- |
+-| `project.create/open/save/analyze` | 项目与模型；`save` 使用 revision 防冲突 |
++| `system.info` / `templates.list` | 服务版本与四个新建模板 |
++| `project.create/open/save/analyze` | 项目与模型；`create` 参数 `{path,name,template}`；`save` 使用 revision 防冲突 |
+ | `project.stub` | 为缺失函数生成骨架 |
+ | `file.read/write/create` | 用户源码（`src/`、`board/`） |
+ | `generate.preview/commit` | 逐文件 Diff → token → 写入 `generated/` |
+-| `debug.start/control/send/stop`、`debug.runs` | 调试会话与记录 |
++| `debug.start` | `{path,target,model?}` → `{session,kind,manifest,state}`；目标 `{kind:virtual\|serial\|tcp\|replay, ...}`；模型有错误抛 `VALIDATION` |
++| `debug.control` | `{session,action,value?}`：`play` · `pause` · `step`（仅虚拟且已暂停，`value` 为前进毫秒）· `speed`（1.0 正常，0 为最快）· `reset`（重建会话） |
++| `debug.send/stop`、`debug.runs` | 文本命令、结束会话、列出 `.efw/runs/` 记录 |
+ 
+ 状态机只读页消费 `project.open` 的 `model.machines` 与 `project.analyze` 的诊断；未增加协议方法或通知。切换状态机、选择状态、选择转换均为本地浏览操作，不调用 `debug.send`。
+ 
+@@ -51,7 +54,7 @@
+ 
+ ## 界面结构
+ 
+-左侧图标导航：总览 · 数据流 · 状态机 · 通信 · 代码 · 调试 · 生成。顶栏：项目名、保存、撤销/重做、“运行”（一键进入虚拟调试）。底部状态栏：诊断计数、目标连接状态、仿真时间。
++左侧图标导航：总览 · 数据流 · 状态机 · 通信 · 代码 · 调试 · 生成。顶栏：项目名与路径、重新载入、运行/停止（启动虚拟目标并跳到调试页，有未保存源码草稿或模型错误时禁用）。底部状态栏：诊断计数、目标连接状态（占位）、模型 hash。撤销/重做尚未实现。
+ 
+ 设计语言：示波器式工程界面。中性石墨底 + 单一钴蓝强调色；绿/黄/红只表示状态；等宽字体显示标识符与数值，界面文字用系统中文字体；明暗主题跟随系统；1366×768 下无需横向滚动；所有交互控件有键盘焦点与文字标签。
+ 
+diff --git a/new/efw/docs/05-ui-style.md b/new/efw/docs/05-ui-style.md
+index 5658981..2cca8ec 100644
+--- a/new/efw/docs/05-ui-style.md
++++ b/new/efw/docs/05-ui-style.md
+@@ -19,6 +19,7 @@
+ | 字 | `--fg` `--fg-dim` `--fg-faint` | 主 / 次 / 弱 |
+ | 强调 | `--accent` `--accent-bg` | 钴蓝 / 选中底 |
+ | 状态 | `--ok` `--warn` `--err` | 只用于状态点、徽标、诊断 |
++| 曲线 | `--s1`–`--s5` | 只用于数据可视化（示波器曲线） |
+ | 尺寸 | `--r` (4px 圆角) `--gap` (8px 基数) | 间距只用 4/8/12/16/24 |
+ | 字体 | `--sans` `--mono` | 界面 / 标识符与数值 |
+ 
+@@ -28,12 +29,12 @@
+ 
+ ```
+ ┌────┬──────────────────────────────┐
+-│ 侧 │ 顶栏 40px：项目名 · 保存 · 运行 │
++│ 侧 │ 顶栏 40px：项目名 · 重新载入 · 运行 │
+ │ 栏 ├──────────────────────────────┤
+ │ 72 │ 页面（最大宽度 1080，居中）    │
+ │ px │                              │
+ ├────┴──────────────────────────────┤
+-│ 状态栏 24px：诊断 · 目标 · 仿真时间 │
++│ 状态栏 24px：诊断 · 目标 · 模型 hash │
+ └───────────────────────────────────┘
+ ```
+ 
+@@ -79,6 +80,13 @@
+ - 左列文件、右侧 Diff，沿用代码页的“列表 + 编辑器”布局；Diff 只读、行内模式、隐藏未改动区域。
+ - 阻止覆盖（手改生成文件）用诊断条说明原因，不弹模态；提交失败时保留当前预览。
+ 
++### 页面内模型编辑（待实现，先按此约定）
++
++- 编辑动作只改内存模型，统一经 `updateModel` 保存：`project.save`（带 revision）→ `project.analyze` → 全页刷新；失败保留原模型、用诊断条说明。
++- 数据流：句子行内编辑（点开下拉改信号/参数）、拖动排序；状态机：加/删状态与转换、点击规则改条件；通信：表格行内编辑与增删。
++- id 由工具生成、不可改；删除前检查引用，有引用时先说明再决定。不引入自由画布与节点连线。
++- 可点击元素带 `data-id`/`data-key`；确认删除用行内两步确认，不用模态。
++
+ ## 代码组织
+ 
+ ```
+@@ -86,10 +94,13 @@ ui/
+   main.tsx          入口
+   App.tsx           壳：侧栏/顶栏/状态栏 + 路由（useState，无路由库）
+   rpc.ts            与服务通信（唯一入口）
+-  store.tsx         项目状态：model / analysis / revision
++  store.tsx         项目与调试状态；sourcesDirty 由代码页维护
+   types.ts          与后端字段一一对应的类型（依据 docs/02、docs/04）
++  debug.ts          调试帧 → 界面状态的归约
++  template.ts       源码模板标记解析（与后端 source_template.py 同规则）
++  monaco.ts         Monaco 初始化与语言注册（编辑器/Diff 共用）
+   pages/            每页一个文件；只读 store，写入走 store 的 action
+-  components/       跨页复用的小组件
++  components/       SourceEditor / CurveChart / DiffView
+   styles/           tokens.css（变量）+ app.css（布局与组件）
+ ```
+ 

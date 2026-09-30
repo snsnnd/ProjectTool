@@ -1,0 +1,13 @@
+[PASS] expected_rev conflict  REVISION_CONFLICT raised
+[PASS] rev corruption detected
+[PASS] broken reference detected
+[PASS] hierarchy cycle detected
+[PASS] stale lock detected & cleaned
+[PASS] uncommitted staging discarded
+[PASS] crash injection  ProjectIOError raised
+[PASS] partial transaction scan  status=prepared
+[PASS] roll-forward recovery
+[PASS] recovery idempotent
+[PASS] event immutability
+
+RESULT: PASS (all destructive checks)

@@ -1,0 +1,136 @@
+ M .gitignore
+ M CMakeLists.txt
+ M README.md
+ M application/smart_environment_controller/app_components.c
+ M data/board_profiles/Blue_Pill.json
+ M data/board_profiles/Discovery_F407.json
+ M data/board_profiles/Nucleo_F103RB.json
+ M data/board_profiles/Nucleo_F411RE.json
+ M data/board_profiles/Nucleo_F446RE.json
+ M data/board_profiles/Nucleo_G431CB.json
+ M data/mcu/index.json
+ M docs/api_reference.md
+ M docs/debug.md
+ M examples/debug/efw_litetune_transport_port.c
+ M examples/graphs/generic_embedded_app.json
+ M examples/graphs/line_tracking_car.json
+ M examples/graphs/line_tracking_car_with_custom_code.json
+ M examples/graphs/multi_input_mapping_demo.json
+ M examples/graphs/stm32f1_line_tracking_car.json
+ M include/efw/algorithm/registry.h
+ M include/efw/app/runtime.h
+ M include/efw/comm/comm.h
+ M include/efw/core/config.h
+ M include/efw/core/diagnostic.h
+ M include/efw/core/ds.h
+ M include/efw/core/event.h
+ M include/efw/core/registry.h
+ M include/efw/core/scheduler.h
+ M include/efw/debug/efw_debug.h
+ M include/efw/debug/efw_debug_async.h
+ M include/efw/debug/efw_debug_fast.h
+ M include/efw/debug/efw_debug_litetune.h
+ M include/efw/debug/efw_debug_runtime.h
+ M include/efw/device/actuator.h
+ M include/efw/device/sensor.h
+ M include/efw/efw.h
+ M include/efw/hal/hal.h
+ M include/efw/module/module.h
+ M include/efw/state/state_machine.h
+ M lite-tune/src/litetune-skill/code/daemon.py
+ M lite-tune/src/litetune-skill/code/daemon_frames.py
+ M lite-tune/src/litetune-skill/code/daemon_ops.py
+ M lite-tune/src/litetune-skill/code/daemon_state.py
+ M lite-tune/src/litetune-skill/code/litetune_protocol.py
+ M lite-tune/src/litetune-skill/code/lt.py
+ M lite-tune/src/litetune-skill/code/pyproject.toml
+ D lite-tune/src/litetune-skill/runtime/.gitkeep
+ M lite-tune/tests/test_litetune_daemon_ops.py
+ M lite-tune/tests/test_litetune_protocol.py
+ M lite-tune/tests/test_lt_cli.py
+ M new/efw/AGENTS.md
+ M new/efw/docs/03-runtime.md
+ M new/efw/docs/04-debug-and-api.md
+ M new/efw/docs/05-ui-style.md
+ M src/algorithm/algorithm_registry.c
+ M src/algorithm/estimator/encoder_speed.c
+ M src/app/runtime.c
+ M src/comm/comm_registry.c
+ M src/core/diagnostic.c
+ M src/core/event.c
+ M src/core/init.c
+ M src/core/scheduler.c
+ M src/debug/efw_debug.c
+ M src/debug/efw_debug_async.c
+ M src/debug/efw_debug_fast.c
+ M src/debug/efw_debug_litetune.c
+ M src/device/actuator_registry.c
+ M src/device/sensor/line_tracking.c
+ M src/device/sensor_registry.c
+ M src/efw_all.c
+ M src/hal/hal_registry.c
+ M src/module/module_registry.c
+ M src/state/state_machine_registry.c
+ M tests/codegen_snapshot_test.py
+ M tests/debug/CMakeLists.txt
+ M tests/debug/mock_efw_stubs.c
+ M tests/debug/run_test.sh
+ M tests/efw_sim_test.c
+ M tools/api/board.py
+ M tools/api/build.py
+ M tools/api/device.py
+ M tools/api/graph.py
+ M tools/api/project.py
+ M tools/codegen/generator.py
+ M tools/codegen/graph/__init__.py
+ M tools/codegen/graph/common.py
+ M tools/codegen/graph/edge_semantics.py
+ M tools/codegen/templates/app_bootstrap.c.tpl
+ M tools/codegen/templates/app_components.c.tpl
+ M tools/codegen/templates/main.c.tpl
+ M tools/codegen/validate.py
+ M tools/compiler/cmake_generator.py
+ M tools/compiler/compiler.py
+ M tools/debug/cli.py
+ M tools/debug/collector.py
+ M tools/debug/panel.py
+ M tools/efw.py
+ M tools/firmware/manager.py
+ M tools/project/cli.py
+ M tools/project/core.py
+ M tools/project/operations.py
+ M tools/simulator/core.py
+ M tools/studio/model.py
+ M tools/workflow.py
+?? .vs/
+?? data/mcu/STM32G4/STM32G431RBT6.json
+?? data/targets/
+?? docs/efw_framework_design_and_review.md
+?? hwtest_g431/
+?? include/efw/core/pool.h
+?? include/efw/debug/litetune/
+?? lite-tune/src/litetune-skill/code/uv.lock
+?? lite-tune/tmp.py
+?? src/debug/efw_debug_litetune_commands.inc
+?? src/debug/efw_debug_litetune_params.inc
+?? src/debug/efw_debug_litetune_trace.inc
+?? tests/debug/test_debug_behavior.c
+?? tests/debug/test_litetune_tx.c
+?? tests/module_smoke_test.c
+?? tests/test_codegen_trace.py
+?? tests/test_generated_app_fixture.py
+?? tests/test_groundstation_loopback.py
+?? tests/test_python_toolchain_hardening.py
+?? tools/api/flash.py
+?? tools/api/groundstation.py
+?? tools/api/legacy.py
+?? tools/board/stm32_bsp.py
+?? tools/codegen/dataflow.py
+?? tools/codegen/platform_render.py
+?? tools/codegen/publisher_render.py
+?? tools/codegen/runtime_model.py
+?? tools/codegen/state_render.py
+?? tools/firmware/stm32.py
+?? tools/groundstation/
+?? tools/simulator/efw_model.py
+?? tools/target.py
