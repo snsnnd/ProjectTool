@@ -9,35 +9,35 @@ on:
 
 jobs:
   per-file:
-    name: win :: ${{ matrix.file }}
+    name: "win :: ${{ matrix.file }}"
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
         file:
-            "tests/test_area.py",
-            "tests/test_artifact.py",
-            "tests/test_cli.py",
-            "tests/test_cli_completeness.py",
-            "tests/test_conflict.py",
-            "tests/test_dependency.py",
-            "tests/test_doctor.py",
-            "tests/test_events.py",
-            "tests/test_expected_rev.py",
-            "tests/test_gap_fixes.py",
-            "tests/test_git.py",
-            "tests/test_graph.py",
-            "tests/test_hardening.py",
-            "tests/test_hashing.py",
-            "tests/test_ids.py",
-            "tests/test_locking.py",
-            "tests/test_project_revision.py",
-            "tests/test_registry.py",
-            "tests/test_service_flow.py",
-            "tests/test_storage.py",
-            "tests/test_task_ready_cli.py",
-            "tests/test_transaction_recovery.py",
-            "tests/test_validation.py",
+          - tests/test_area.py
+          - tests/test_artifact.py
+          - tests/test_cli.py
+          - tests/test_cli_completeness.py
+          - tests/test_conflict.py
+          - tests/test_dependency.py
+          - tests/test_doctor.py
+          - tests/test_events.py
+          - tests/test_expected_rev.py
+          - tests/test_gap_fixes.py
+          - tests/test_git.py
+          - tests/test_graph.py
+          - tests/test_hardening.py
+          - tests/test_hashing.py
+          - tests/test_ids.py
+          - tests/test_locking.py
+          - tests/test_project_revision.py
+          - tests/test_registry.py
+          - tests/test_service_flow.py
+          - tests/test_storage.py
+          - tests/test_task_ready_cli.py
+          - tests/test_transaction_recovery.py
+          - tests/test_validation.py
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
