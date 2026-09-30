@@ -8,7 +8,13 @@ import typer
 from rich.tree import Tree
 
 from project_tool.cli.common import ExpectedRev, console, execute, sid
-from project_tool.cli.render import render_area_list, render_area_show
+from project_tool.cli.render import (
+    render_area_list,
+    render_area_matches,
+    render_area_show,
+    render_events,
+    render_task_table,
+)
 
 area_app = typer.Typer(help="Areas (stable project partitions)", no_args_is_help=True)
 
@@ -165,3 +171,49 @@ def area_restore(
         {"area_id": area_id, "expected_rev": expected_rev},
         render=lambda r: console.print(f"{r['id']} restored"),
     )
+
+
+@area_app.command("tasks")
+def area_tasks(
+    ctx: typer.Context,
+    area_id: Annotated[str, typer.Argument()],
+    include_archived: Annotated[bool, typer.Option("--include-archived")] = False,
+) -> None:
+    """List tasks belonging to an area."""
+    execute(
+        ctx,
+        "area.tasks",
+        {"area_id": area_id, "include_archived": include_archived},
+        render=lambda r: render_task_table(r) if r else console.print("[dim]no tasks[/dim]"),
+    )
+
+
+@area_app.command("set-parent")
+def area_set_parent(
+    ctx: typer.Context,
+    area_id: Annotated[str, typer.Argument()],
+    parent: Annotated[str | None, typer.Option("--parent", help="Parent area id; omit to detach")] = None,
+    rev: ExpectedRev = None,
+) -> None:
+    """Set (or clear) an area's parent area."""
+    execute(
+        ctx,
+        "area.set_parent",
+        {"area_id": area_id, "parent_area_id": parent, "expected_rev": rev},
+        render=lambda r: console.print(f"{r['id']} parent -> {r.get('parent_area_id') or '(none)'}"),
+    )
+
+
+@area_app.command("match-path")
+def area_match_path(
+    ctx: typer.Context,
+    path: Annotated[str, typer.Argument(help="Project-relative path to match against path_patterns")],
+) -> None:
+    """Show which areas claim a path via their path_patterns (read-only)."""
+    execute(ctx, "area.match_path", {"path": path}, render=render_area_matches)
+
+
+@area_app.command("history")
+def area_history(ctx: typer.Context, area_id: Annotated[str, typer.Argument()]) -> None:
+    """Show area event history."""
+    execute(ctx, "area.history", {"area_id": area_id}, render=render_events)

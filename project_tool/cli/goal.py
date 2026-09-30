@@ -109,3 +109,33 @@ def goal_drop(ctx: typer.Context, goal_id: Annotated[str, typer.Argument()]) -> 
         {"goal_id": goal_id, "status": "dropped"},
         render=lambda r: console.print(f"{r['id']} -> dropped"),
     )
+
+
+@goal_app.command("archive")
+def goal_archive(
+    ctx: typer.Context,
+    goal_id: Annotated[str, typer.Argument()],
+    rev: ExpectedRev = None,
+) -> None:
+    """Archive a goal (lifecycle=archived)."""
+    execute(
+        ctx,
+        "goal.archive",
+        {"goal_id": goal_id, "expected_rev": rev},
+        render=lambda r: console.print(f"{r['id']} archived"),
+    )
+
+
+@goal_app.command("restore")
+def goal_restore(
+    ctx: typer.Context,
+    goal_id: Annotated[str, typer.Argument()],
+    rev: ExpectedRev = None,
+) -> None:
+    """Restore an archived goal."""
+    execute(
+        ctx,
+        "goal.restore",
+        {"goal_id": goal_id, "expected_rev": rev},
+        render=lambda r: console.print(f"{r['id']} restored"),
+    )

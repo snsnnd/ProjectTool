@@ -2,14 +2,47 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 import typer
+from rich.padding import Padding
 from rich.table import Table
+from rich.text import Text
 from rich.tree import Tree
 
 from project_tool.cli.common import bar, console, event_detail, sid, ts
 from project_tool.domain.ids import short_id
+
+
+def display_width(text: str) -> int:
+    """终端显示宽度：全角字符（中文/日文/emoji）算 2 列。"""
+    return sum(
+        2 if unicodedata.east_asian_width(char) in ("W", "F") else 1 for char in str(text)
+    )
+
+
+def ellipsis(text: str, width: int) -> str:
+    """按显示宽度截断并加省略号（中文按 2 列算）。
+
+    终端表格里的长标题必须**截断**而不是折行——折行会让每个任务占两行，
+    十几个任务就没法扫了（V0.1 dogfooding 报告 P3-7 的实际观感）。
+    要看完整标题用 `pjt task show`，要程序处理用 `--json` / `--porcelain`。
+    """
+    text = str(text)
+    if width <= 1:
+        return ""
+    if display_width(text) <= width:
+        return text
+    kept: list[str] = []
+    used = 0
+    for char in text:
+        char_width = 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+        if used + char_width > width - 1:
+            break
+        kept.append(char)
+        used += char_width
+    return "".join(kept) + "…"
 
 
 def render_init(result: dict[str, Any]) -> None:
@@ -52,7 +85,13 @@ def render_status(result: dict[str, Any]) -> None:
     if blocked:
         console.print("\n[bold red]Computed blocked[/bold red]")
         for item in blocked:
-            console.print(f"  {sid(item['id'])}  {item['title']}")
+            where = " · ".join(
+                part
+                for part in (item.get("area_name"), item.get("milestone_title"))
+                if part
+            )
+            suffix = f"  [dim]{ellipsis(where, 40)}[/dim]" if where else ""
+            console.print(f"  {sid(item['id'])}  {ellipsis(item['title'], 60)}{suffix}")
             console.print(
                 f"    [dim]waiting for {', '.join(sid(t) for t in item['blocked_by'])}[/dim]"
             )
@@ -161,13 +200,15 @@ def render_task_table(rows: list[dict[str, Any]]) -> None:
     if not rows:
         console.print("[dim]no tasks[/dim]")
         return
+    # 只有 Title 列伸缩（ratio=1），其余列用 min_width 钉死——
+    # 否则窄终端下 rich 会把每一列都压成 "inb…" / "nor…"，比折行更糟。
     table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
-    table.add_column("ID", style="dim")
-    table.add_column("Status")
-    table.add_column("Priority")
-    table.add_column("W")
-    table.add_column("Title")
-    table.add_column("Owners", style="dim")
+    table.add_column("ID", style="dim", no_wrap=True, min_width=13)
+    table.add_column("Status", no_wrap=True, min_width=8)
+    table.add_column("Priority", no_wrap=True, min_width=8)
+    table.add_column("W", no_wrap=True, min_width=1)
+    table.add_column("Title", overflow="ellipsis", no_wrap=True, ratio=1)
+    table.add_column("Owners", style="dim", no_wrap=True, min_width=13)
     for task in rows:
         status_text = task["status"]
         if task.get("computed_blocked"):
@@ -252,6 +293,60 @@ def render_area_list(rows: list[dict[str, Any]]) -> None:
             f"[dim]{row['task_count']} task(s)"
             f"{'  parent ' + sid(row['parent_area_id']) if row.get('parent_area_id') else ''}[/dim]"
         )
+
+
+def render_git_available(result: dict[str, Any]) -> None:
+    """裸 `pjt git`：Git 感知是否可用。"""
+    if not result.get("available"):
+        console.print("[yellow]git awareness unavailable[/yellow]")
+        console.print(f"  [dim]{result.get('reason', '')}[/dim]")
+        return
+    console.print("[green]git awareness available[/green]  [dim](read-only)[/dim]")
+    console.print(f"  work tree : {result.get('work_tree')}")
+    if result.get("project_root_is_git_root"):
+        console.print("  layout    : project root == git root")
+    else:
+        subdir = result.get("project_subdir")
+        console.print(f"  layout    : project root is [bold]{subdir or '(unknown)'}[/bold] under git root")
+
+
+def render_link_status(result: dict[str, Any]) -> None:
+    """`pjt link status` —— 字段与 link.resolve 一致（V1-B.1：resolved 不许说谎）。
+
+    `resolved=true` 只在真的读到了对方的 project.json 时出现；
+    非 local_project 一律 resolved=false 并给出原因。
+    """
+    resolved = bool(result.get("resolved"))
+    mark = "[green]resolved[/green]" if resolved else "[yellow]unresolved[/yellow]"
+    console.print(
+        f"[bold]{result.get('name', '')}[/bold]  {result.get('kind', '')}  {mark}"
+        f"  [dim]{result.get('locator') or result.get('project_id') or ''}[/dim]"
+    )
+    if resolved:
+        peer = result.get("project") or {}
+        console.print(f"  peer   : {peer.get('name', '')}  [dim]{peer.get('id', '')}[/dim]")
+        if result.get("path"):
+            console.print(f"  path   : {result['path']}")
+    else:
+        # 原因通常很长；用悬挂缩进，别让续行顶到最左边。
+        console.print("  [dim]why  :[/dim]")
+        console.print(
+            Padding(
+                Text(result.get("error", "unknown"), style="dim"),
+                (0, 0, 0, 8),
+            )
+        )
+
+
+def render_area_matches(result: list[dict[str, Any]]) -> None:
+    """`pjt area match-path` —— 哪些 Area 的 path_patterns 认领了这个路径（只读推导）。"""
+    if not result:
+        console.print("  [dim]no area claims this path[/dim]")
+        return
+    for match in result:
+        console.print(f"  {sid(match['id'])}  {match['name']}")
+        for pattern in match.get("patterns") or []:
+            console.print(f"    [dim]{pattern}[/dim]")
 
 
 def render_area_show(result: dict[str, Any]) -> None:

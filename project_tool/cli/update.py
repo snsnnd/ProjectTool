@@ -6,8 +6,8 @@ from typing import Annotated
 
 import typer
 
-from project_tool.cli.common import console, execute, read_text_argument
-from project_tool.cli.render import render_update_list
+from project_tool.cli.common import ExpectedRev, console, execute, read_text_argument
+from project_tool.cli.render import render_events, render_update_list
 
 update_app = typer.Typer(help="Progress updates", no_args_is_help=True)
 
@@ -58,3 +58,46 @@ def update_list(
 def update_show(ctx: typer.Context, update_id: Annotated[str, typer.Argument()]) -> None:
     """Show an update."""
     execute(ctx, "update.get", {"update_id": update_id})
+
+
+@update_app.command("edit")
+def update_edit(
+    ctx: typer.Context,
+    update_id: Annotated[str, typer.Argument()],
+    summary: Annotated[str | None, typer.Option("--summary")] = None,
+    body: Annotated[str | None, typer.Option("--body")] = None,
+    rev: ExpectedRev = None,
+) -> None:
+    """Edit a progress update."""
+    execute(
+        ctx,
+        "update.update",
+        {
+            "update_id": update_id,
+            "summary": summary,
+            "body": body,
+            "expected_rev": rev,
+        },
+        render=lambda r: console.print(f"{r['id']} updated  {r['summary']}"),
+    )
+
+
+@update_app.command("archive")
+def update_archive(
+    ctx: typer.Context,
+    update_id: Annotated[str, typer.Argument()],
+    rev: ExpectedRev = None,
+) -> None:
+    """Archive a progress update."""
+    execute(
+        ctx,
+        "update.archive",
+        {"update_id": update_id, "expected_rev": rev},
+        render=lambda r: console.print(f"{r['id']} archived"),
+    )
+
+
+@update_app.command("history")
+def update_history(ctx: typer.Context, update_id: Annotated[str, typer.Argument()]) -> None:
+    """Show update event history."""
+    execute(ctx, "update.history", {"update_id": update_id}, render=render_events)

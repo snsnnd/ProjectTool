@@ -12,8 +12,23 @@ import typer
 from rich.table import Table
 
 from project_tool.cli.common import console, execute, sid
+from project_tool.cli.render import render_git_available
 
-git_app = typer.Typer(help="Git awareness (read-only; never writes the repository)", no_args_is_help=True)
+# 裸 `pjt git` 打印可用性（不调子命令），所以这里不能用 no_args_is_help。
+# invoke_without_command=True 让 `pjt git` 能落到下面的回调。
+git_app = typer.Typer(
+    help="Git awareness (read-only; never writes the repository)", invoke_without_command=True
+)
+
+
+@git_app.callback()
+def git_root(
+    ctx: typer.Context,
+) -> None:
+    """With no subcommand, report whether Git awareness is available here."""
+    if ctx.invoked_subcommand is not None:
+        return
+    execute(ctx, "git.available", {}, render=render_git_available)
 
 AREA_CODES = {
     "ok": "green",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from project_tool.domain.enums import Lifecycle, MilestoneStatus, TaskStatus
 from project_tool.domain.errors import NotFound
@@ -46,6 +46,18 @@ def project_status(ctx, recent_limit: int = 10) -> dict[str, Any]:
     active_milestones.sort(key=lambda milestone: milestone.id)
     milestone_views = [milestone_summary(milestone, tasks) for milestone in active_milestones]
 
+    # 归属用**名字**而不是 ID：blocked 列表里只有短 ID 解决不了「这条属于哪块」。
+    # 直接把名字放进条目，而不是往 status 里塞一份完整的 areas 列表
+    # （V1-A 的决定：pjt status 不列举所有 Area，避免信息过载）。
+    area_names = {
+        area.id: area.name
+        for area in cast(list[Any], ctx.store.list_models("area"))
+        if getattr(area, "lifecycle", None) == Lifecycle.ACTIVE
+    }
+    milestone_titles = {
+        milestone.id: milestone.title for milestone in milestones
+    }
+
     blocked: list[dict[str, Any]] = []
     for task in sorted(tasks.values(), key=lambda item: item.id):
         if task.lifecycle != Lifecycle.ACTIVE or task.status in TERMINAL_TASK_STATUSES:
@@ -57,6 +69,12 @@ def project_status(ctx, recent_limit: int = 10) -> dict[str, Any]:
                     "id": task.id,
                     "title": task.title,
                     "status": task.status.value,
+                    "area_id": task.area_id,
+                    "area_name": area_names.get(task.area_id) if task.area_id else None,
+                    "milestone_id": task.milestone_id,
+                    "milestone_title": (
+                        milestone_titles.get(task.milestone_id) if task.milestone_id else None
+                    ),
                     "blocked_by": blockers,
                 }
             )

@@ -402,3 +402,23 @@ def task_delete(ctx: typer.Context, task_id: Annotated[str, typer.Argument()]) -
 def task_history(ctx: typer.Context, task_id: Annotated[str, typer.Argument()]) -> None:
     """Show task event history."""
     execute(ctx, "task.history", {"task_id": task_id}, render=render_events)
+
+
+@task_app.command("set-parent")
+def task_set_parent(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    parent: Annotated[
+        str | None, typer.Option("--parent", help="Parent task id; omit to detach")
+    ] = None,
+    rev: ExpectedRev = None,
+) -> None:
+    """Set (or clear) a task's parent task (subtask nesting)."""
+    execute(
+        ctx,
+        "task.set_parent",
+        {"task_id": task_id, "parent_task_id": parent, "expected_rev": rev},
+        render=lambda r: console.print(
+            f"{r['id']} parent -> {r.get('parent_task_id') or '(none)'}"
+        ),
+    )

@@ -258,17 +258,18 @@ pjt status                      项目状态摘要
 pjt doctor [--repair]           完整性检查；--repair 先执行事务恢复/陈旧锁清理
 pjt migrate                     结构升级
 
-pjt goal add|list|show|edit|achieve|drop   （edit 支持 --expected-rev）
+pjt goal add|list|show|edit|achieve|drop|archive|restore   （edit 支持 --expected-rev）
 pjt milestone add|list|show|edit|activate|close|cancel|progress
 pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
-          |archive|restore|delete|history
+          |archive|restore|delete|history|set-parent
 pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
+          |tasks|set-parent|match-path|history
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history
 pjt member add|list|show|edit|map-git|deactivate|activate|workload|activity|use
-pjt update add|list|show
-pjt decision add|list|show|accept|reject|supersede
-pjt link add|list|show|remove|resolve
+pjt update add|list|show|edit|archive|history
+pjt decision add|list|show|accept|reject|supersede|history
+pjt link add|list|show|remove|resolve|status
 pjt log [--task --member --since --type]
 pjt graph [tasks|milestone <id>|projects]
 ```
@@ -285,6 +286,16 @@ pjt graph [tasks|milestone <id>|projects]
 - `--json`：RPC 响应包（`{"id","result"}` 或 `{"id","error"}`），`ensure_ascii=False`。
 - `--porcelain`：`field<TAB>field`，无颜色无表头，专供脚本。
 - 错误输出到 stderr，带 `code`。
+
+#### 表格与终端宽度（V1-B.2）
+
+终端表格里的长标题**按显示宽度截断并加 `…`，不折行**（全角字符按 2 列算）。
+折行会让每个任务占两行，十几条就没法扫了。要完整标题用 `pjt task show`，
+要程序处理用 `--json` / `--porcelain`。
+
+`pjt status` 的 `computed blocked` 每一行内联显示归属（Area 名 · Milestone 标题），
+但**不列举全部 Area** —— 归属信息只出现在 blocked 条目上。
+裸 `pjt git`（不带子命令）打印 Git 感知可用性与 project root / git root 的关系。
 
 ## 7. 未来 HTTP 映射（V1/V2 预定）
 

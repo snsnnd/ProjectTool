@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from project_tool.cli.common import ExpectedRev, console, execute
-from project_tool.cli.render import render_link_list
+from project_tool.cli.render import render_link_list, render_link_status
 
 link_app = typer.Typer(help="Linked projects", no_args_is_help=True)
 
@@ -97,3 +97,9 @@ def link_edit(
 def link_remove(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> None:
     """Remove a link."""
     execute(ctx, "link.remove", {"name": name}, render=lambda r: console.print(f"{r['name']} removed"))
+
+
+@link_app.command("status")
+def link_status(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> None:
+    """Show a linked project's resolution status (never claims more than it can prove)."""
+    execute(ctx, "link.status", {"name": name}, render=render_link_status)

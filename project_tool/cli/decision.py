@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from project_tool.cli.common import ExpectedRev, console, execute, read_text_argument, sid
-from project_tool.cli.render import render_decision_list
+from project_tool.cli.render import render_decision_list, render_events
 
 decision_app = typer.Typer(help="Decision records", no_args_is_help=True)
 
@@ -162,3 +162,9 @@ def decision_supersede(
             f"{sid(r['superseded']['id'])} superseded by {sid(r['superseded_by']['id'])}"
         ),
     )
+
+
+@decision_app.command("history")
+def decision_history(ctx: typer.Context, decision_id: Annotated[str, typer.Argument()]) -> None:
+    """Show decision event history."""
+    execute(ctx, "decision.history", {"decision_id": decision_id}, render=render_events)
