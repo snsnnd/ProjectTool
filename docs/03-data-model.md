@@ -250,7 +250,10 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
 
 - `path_patterns`（V1-B，**可选**）：相对 project root 的 glob 列表，用于让 Git Adapter
   把改动的文件映射到候选 Area。空列表 = 纯语义 Area，行为与 V1-A 完全一致。
-  必须是 project-relative；绝对路径 / `..` / `.pjt/**` 一律拒绝。
+  必须是 project-relative；绝对路径 / 空段 / `.` / `..` / `.pjt/**` 一律拒绝
+  （拒绝 `.` 段是为了让 `./.pjt/…` 也绕不过检查）。
+  `doctor` 校验：pattern 越界 = error；**pattern 匹配不到任何文件 = warning**
+  （目录改名/移动后的悬挂）；没填 pattern 的 Area 完全不参与该检查。
   只支持 Git 风格通配：`*`（不跨 `/`）、`**`（跨 `/`）、`?`、`[a-z]`；不实现 `{}` 展开。
 - **Git Adapter 只推导、不回写**：`changed file → 候选 Area` 仅作为信息呈现，
   **绝不自动改写 `Task.area_id`**。Area 是人工判断的结构信息，从路径机械推导并回写

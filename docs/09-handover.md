@@ -17,11 +17,11 @@ Git tracks code. Project Tool tracks the project.
 
 | 项 | 值 |
 |---|---|
-| 版本 | `0.3.0`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
+| 版本 | `0.3.1`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
 | 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 |
-| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **336 passed** · CI（Ubuntu+Windows, Py3.12） |
+| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **366 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
 | 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（Area 映射、Artifact 关联、零污染树哈希） |
-| Service API | 显式 registry，**108 个 method**，`system.capabilities` 可发现（`area/artifact/git = true`） |
+| Service API | 显式 registry，**108 个 method**（CLI 触达 85 个），`system.capabilities` 可发现（`area/artifact/git = true`） |
 | 已实现 | **Git 感知（只读）**：`git.available` / `git.status` / `git.log` / `git.link_commit` + `Area.path_patterns` |
 | 未实现 | Search / SQLite 索引 / Web / Artifact 内容快照 / 多人 merge 辅助 |
 | 已砍掉 | Remote / Sync / Accounts / Webhook / KC（见 `docs/06` §V2：协作走 Git，不自建服务器） |
@@ -31,7 +31,7 @@ Git tracks code. Project Tool tracks the project.
 ```bash
 cd /path/to/ProjectTool
 uv sync
-uv run pytest                          # 336 passed
+uv run pytest                          # 366 passed
 uv run ruff check . && uv run mypy project_tool
 
 # 在临时目录体验完整流程（不要污染别人的真实项目）
@@ -62,7 +62,7 @@ ProjectTool/
 │   ├── graph/           # 依赖/层级/进度推导
 │   ├── integrations/    # filesystem（原子写、fsync）
 │   └── cli/             # Typer：main/common/render + 各域模块
-├── tests/               # 21 个测试文件，336 cases
+├── tests/               # 22 个测试文件，366 cases
 ├── docs/                # 01–09（09-handover = 本文件，09-v1a-design = 本轮设计记录）
 ├── dogfooding/          # EFW 真实项目验证报告 + 证据 + 可复现脚本
 ├── pyproject.toml       # uv；dev 依赖 pytest/ruff/mypy；ruff+mypy 配置
@@ -207,10 +207,23 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
 - ~~无 Artifact / 无 Area 维度~~ → `artifact.*`（8 method）+ `area.*`（9 method）。
 - ~~`pjt --version` 实际 exit 2~~ → 修好（V0.1 文档承诺了它但没生效）。
 
+**V1-B.1 已补（`0.3.1`）**
+
+- `link.resolve` 不再说谎：非 `local_project` 的 kind 一律 `resolved=false` +
+  `verifiable=false` + 原因（此前只要 locator 非空就报 `true`）。
+- `doctor` 新增 `areas.path_patterns`：越界 = error；**匹配不到文件 = warning**
+  （目录改名后的悬挂）。没填 pattern 的 Area 不参与。
+- `pjt project show|edit`（`edit` 带 `--expected-rev`）——此前改项目名只能手改 project.json。
+- `pjt member map-git`（`--git-name` / `--git-email` 可重复）——Git 适配器的自然延伸。
+- 顺带堵了一个洞：`./.pjt/xxx` 这类 pattern 之前能绕过 `.pjt` 检查（只看了首段）。
+
 **仍未做（按优先级）**
 
 - `pjt status` 的 computed blocked 列表未带 milestone / area（纯渲染，随时可改）。
 - 长中文标题在终端表格/树中折行（纯显示）。
+- `goal.archive` / `goal.restore` / `update.update` / `update.archive` /
+  `area.history` / `decision.history` / `pjt git`（裸命令）**仍无 CLI**，
+  只有 Service method。属于整洁性缺口，可攒着做。
 - Artifact `file` 缺失时 doctor 报 warning——**这是有意的**：分支切换/删除工程文件很常见，
   不能当数据损坏。但目前没有「这个 artifact 已经不需要了」的批量清理入口（只有单条 remove）。
 - `artifact.list` / `task.related_artifacts` 每次都是全量 file scan；15 任务规模无压力，
@@ -228,6 +241,8 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
   如果「主 Area 说不清」的比例上升，应升到多 Area，而不是硬塞。
 - ⬜ **Area 名不唯一**。同 goal/milestone/task 的 title 一致；按名引用不唯一时报
   `INVALID_ARGUMENT` 并列出候选 ID。真实使用时「UI 只有一个」是自然约束，但没有强制。
+- ⬜ **没有多人 merge 辅助**（用户已确认放到最后做）。2 个并发写者 merge `.pjt` 冲突时
+  `doctor` 报 `PROJECT_CORRUPTED`（正确但需人工解）。
 
 **技术债**
 

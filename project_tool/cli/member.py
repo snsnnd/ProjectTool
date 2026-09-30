@@ -110,6 +110,37 @@ def member_activate(ctx: typer.Context, member: Annotated[str, typer.Argument()]
     )
 
 
+@member_app.command("map-git")
+def member_map_git(
+    ctx: typer.Context,
+    member: Annotated[str, typer.Argument()],
+    git_name: Annotated[
+        list[str] | None, typer.Option("--git-name", help="Git author name (repeatable)")
+    ] = None,
+    git_email: Annotated[
+        list[str] | None, typer.Option("--git-email", help="Git author email (repeatable)")
+    ] = None,
+    expected_rev: ExpectedRev = None,
+) -> None:
+    """Map a member to git identities, so commits can be attributed to a person."""
+    if not git_name and not git_email:
+        raise typer.BadParameter("pass at least one --git-name or --git-email")
+    execute(
+        ctx,
+        "member.map_git_identity",
+        {
+            "member": member,
+            "git_names": git_name,
+            "git_emails": git_email,
+            "expected_rev": expected_rev,
+        },
+        render=lambda r: console.print(
+            f"{r['handle']}  git names={r['git']['names'] or '-'}  "
+            f"emails={r['git']['emails'] or '-'}"
+        ),
+    )
+
+
 @member_app.command("workload")
 def member_workload(ctx: typer.Context, member: Annotated[str, typer.Argument()]) -> None:
     """Show member workload."""

@@ -151,12 +151,26 @@ class MemberService:
         return {"actor": member_id, "handle": record.get("handle") if record else None}
 
     def member_map_git_identity(
-        self, member, name=None, email=None, expected_rev=None
+        self, member, git_names=None, git_emails=None, expected_rev=None
     ) -> dict[str, Any]:
+        """把 member 与 git 身份关联起来（commit 归属到人）。
+
+        参数形态与 `member.update` 对齐（列表、可重复、去重），而不是单值——
+        一个人在不同机器上常有多个 git name / email。
+        """
         loaded = self.ctx.load("member", self.ctx.member_id(member))
         base = self.ctx.require_expected_rev("member", loaded, expected_rev)
-        if name and str(name) not in loaded.git.names:
-            loaded.git.names.append(str(name))
-        if email and str(email) not in loaded.git.emails:
-            loaded.git.emails.append(str(email))
-        return self.ctx.save(loaded, base, "member.updated", {"fields": ["git"]})
+        fields: list[str] = []
+        names = dedupe([str(item) for item in as_list(git_names)])
+        emails = dedupe([str(item) for item in as_list(git_emails)])
+        new_names = [item for item in names if item not in loaded.git.names]
+        new_emails = [item for item in emails if item not in loaded.git.emails]
+        if new_names:
+            loaded.git.names.extend(new_names)
+            fields.append("git.names")
+        if new_emails:
+            loaded.git.emails.extend(new_emails)
+            fields.append("git.emails")
+        if not fields:
+            return loaded.model_dump(mode="json")
+        return self.ctx.save(loaded, base, "member.updated", {"fields": fields})

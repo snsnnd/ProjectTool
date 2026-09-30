@@ -45,12 +45,15 @@ def normalize_path_pattern(pattern: str) -> str:
             f"area path pattern must be project-relative, got an absolute path: {pattern!r}"
         )
     normalized = text.replace("\\", "/")
-    if any(segment == ".." for segment in normalized.split("/")):
+    segments = normalized.split("/")
+    # 与 Artifact 的 file locator 同一套规则：拒绝空段 / `.` / `..`。
+    # 不拒绝的话 `./.pjt/xxx` 和 `./../xxx` 会绕过下面的检查。
+    if any(segment in ("", ".", "..") for segment in segments):
         raise InvalidArgument(
-            f"area path pattern must not escape the project root: {pattern!r}"
+            "area path pattern must not contain empty, '.' or '..' segments: "
+            f"{pattern!r}"
         )
-    first = normalized.split("/")[0]
-    if first.casefold() == RESERVED_DIR:
+    if segments[0].casefold() == RESERVED_DIR:
         raise InvalidArgument(
             f"area path pattern must not point inside {RESERVED_DIR}/: {pattern!r}"
         )
@@ -148,6 +151,36 @@ def match_any(patterns: list[str], path: str) -> bool:
 
 def is_glob(pattern: str) -> bool:
     return bool(_GLOB_CHARS.search(str(pattern or "")))
+
+
+SCAN_SKIP_DIRS = frozenset({".pjt", ".git", ".venv", "node_modules", "__pycache__"})
+MAX_SCAN_FILES = 20000
+
+
+def scan_files(root, skip: frozenset[str] = SCAN_SKIP_DIRS) -> list[str]:
+    """列出 project root 下的相对文件路径（有上限，避免病态目录拖垮 doctor）。"""
+    files: list[str] = []
+    root_path = root if hasattr(root, "iterdir") else __import__("pathlib").Path(root)
+    for path in root_path.rglob("*"):
+        if len(files) >= MAX_SCAN_FILES:
+            break
+        relative = path.relative_to(root_path)
+        if relative.parts[0] in skip:
+            continue
+        if path.is_file():
+            files.append(relative.as_posix())
+    return files
+
+
+def find_matching_paths(root, patterns: list[str]) -> dict[str, list[str]]:
+    """每个 pattern 命中了哪些文件（用于 doctor 检测「目录改名后 pattern 悬挂」）。"""
+    if not patterns:
+        return {}
+    files = scan_files(root)
+    result: dict[str, list[str]] = {}
+    for pattern in patterns:
+        result[pattern] = [path for path in files if match_path(pattern, path)]
+    return result
 
 
 def describe_match(pattern: str, path: str) -> dict[str, Any]:

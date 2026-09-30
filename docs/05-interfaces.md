@@ -200,6 +200,10 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
   不得把任务分配到 inactive member 或 `closed/cancelled` milestone。
 - Area 位置参数（`--area`、`pjt area …`）同时接受 ID、短 ID、Area 名（大小写不敏感）；
   名称不唯一时报 `INVALID_ARGUMENT`，不猜测。
+- `link.resolve` 的 `resolved` 语义是**真的能拿到对方项目的数据**，不是「我填了地址」。
+  没有服务器也不发网络请求，所以只有 `kind=local_project` 能真正解析；
+  `remote_project` / `git_repository` / `external` 一律 `resolved=false` +
+  `verifiable=false` + 说明原因。link 记录本身仍然有效可用。
 
 示例：
 
@@ -249,6 +253,7 @@ pjt [--json] [--porcelain] [--as MEMBER] [-C PATH] <command>
 
 ```text
 pjt init [PATH]                 初始化
+pjt project show|edit            项目记录（edit 支持 --expected-rev）
 pjt status                      项目状态摘要
 pjt doctor [--repair]           完整性检查；--repair 先执行事务恢复/陈旧锁清理
 pjt migrate                     结构升级
@@ -260,7 +265,7 @@ pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |archive|restore|delete|history
 pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history
-pjt member add|list|show|edit|deactivate|activate|workload|activity|use
+pjt member add|list|show|edit|map-git|deactivate|activate|workload|activity|use
 pjt update add|list|show
 pjt decision add|list|show|accept|reject|supersede
 pjt link add|list|show|remove|resolve

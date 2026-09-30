@@ -61,6 +61,7 @@ my-project/
 | 真实项目二次 dogfooding（EFW Studio，两轮，零源码污染） | ✅（[V0.1](dogfooding/report.md) · [V1-A](dogfooding/v1a-report.md)） |
 | ruff + mypy + 271 tests + CI（Ubuntu + Windows, Py3.12） | ✅ |
 | **Git 感知（只读）**：`git status` / `git log` / commit → `git_commit` Artifact | ✅（V1-B） |
+| `doctor` 校验 Area 目录绑定（目录改名后 pattern 悬挂会报 warning） | ✅ |
 | Area ↔ 目录绑定（`path_patterns`，可选） | ✅（V1-B） |
 | Search / 全文检索 | ⏳ 未排期 |
 | Remote / Sync / Accounts / Webhook / Web UI | ❌ **不做**（见上方边界） |
@@ -97,13 +98,14 @@ pjt init
 
 ```bash
 pjt member add jichao --name "计超" --role maintainer
+pjt member map-git jichao --git-name jichao --git-email jichao@example.com
 pjt goal add "完成 EFW Studio 1.0"
 
 # Milestone = 阶段 / 交付节点
 pjt milestone add "真机 Debug MVP" --goal GOL-xxx --due 2026-10-20
 
 # Area = 稳定模块 / 工作领域
-pjt area add Debug -d "传输层与真机调试"
+pjt area add Debug -d "传输层与真机调试" --path-pattern 'studio_core/**'
 
 # Task 同时属于 1 milestone + 1 area + N labels
 pjt task add "实现 TCP Transport" \
@@ -165,6 +167,7 @@ Project
 
 ```text
 pjt init [PATH]                 初始化项目（生成 .pjt/）
+pjt project show|edit            项目记录（edit 支持 --expected-rev）
 pjt status                      项目状态摘要
 pjt doctor [--repair]           完整性检查（损坏时 exit 9）
 pjt migrate                     schema 升级（老项目必跑一次）
@@ -179,10 +182,10 @@ pjt area   add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-p
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history
 pjt goal     add|list|show|edit|achieve|drop
 pjt milestone add|list|show|edit|activate|close|cancel|progress
-pjt member   add|list|show|edit|deactivate|activate|workload|activity|use
+pjt member   add|list|show|edit|map-git|deactivate|activate|workload|activity|use
 pjt update   add|list|show
 pjt decision add|list|show|edit|accept|reject|supersede
-pjt link     add|list|show|edit|remove|resolve
+pjt link     add|list|show|edit|remove|resolve   （只有 local_project 能真正解析）
 ```
 
 编辑类命令（`edit` / `attach` / 状态快捷命令）统一支持 `--expected-rev REV`，

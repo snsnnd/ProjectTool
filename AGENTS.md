@@ -13,7 +13,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 
 ## 1. 当前状态
 
-- 版本 `0.3.0`，`SCHEMA_VERSION = "1.1"`。**`version.py` 是唯一版本来源**
+- 版本 `0.3.1`，`SCHEMA_VERSION = "1.1"`。**`version.py` 是唯一版本来源**
   （`pyproject.toml` 用 `dynamic = ["version"]` 指向它）。
   改版本号后本仓库的可编辑安装元数据不会自动刷新，需要
   `uv pip install -e . --reinstall-package project-tool`（CI 的全新 `uv sync` 不受影响）。
@@ -23,7 +23,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（271 passed）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
-  **Artifact** / Link；Service 108 个 method。
+  **Artifact** / Link；Service 108 个 method，CLI 触达 85 个。
 - 真实使用：EFW Studio（`framework@tmp/new` 的 `new/efw`）已完成两轮 dogfooding，零源码污染；
   数据保留在 `new/efw/.pjt`。报告：`dogfooding/report.md`（V0.1）、
   `dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（V1-A）。
@@ -32,7 +32,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
   `Area.path_patterns`。
 - 未实现：Search / SQLite 索引 / Web / Artifact 内容快照 / 多人 merge 辅助。
 
-## 2. 最重要十二条（违反即事故）
+## 2. 最重要十三条（违反即事故）
 
 1. `.pjt` 是唯一数据源；`project.json + objects/ + events/` 不可被缓存替代。
 2. Event append-only；禁止任何 update/delete 事件的 API 或脚本。
@@ -53,7 +53,9 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     （`rev-parse` / `status` / `log` / `show`），且一律加 `--no-optional-locks`。
     绝不 clone/add/commit/checkout/merge/reset/clean/push/fetch。
     `git status` 只**推导**候选 Area，**绝不回写 `Task.area_id`**。
-12. **Schema 写入门 + 读即校验 rev**：项目 schema 落后时禁止所有写操作
+12. **`link.resolve` 不许说谎**：`resolved` 只能为 true 当它真的读到了对方
+    `project.json`；没有服务器就没法解析 remote link，如实报 `verifiable=false`。
+13. **Schema 写入门 + 读即校验 rev**：项目 schema 落后时禁止所有写操作
     （`SCHEMA_MIGRATION_REQUIRED`）；`load_model`/`list_models` 强制 `verify_rev`，
     被外部篡改的对象读取即 `PROJECT_CORRUPTED`，不允许靠下一次写入洗白。
     例外只有 `doctor` 与 `resolve_actor`（数据已损坏时它们必须仍能工作）。

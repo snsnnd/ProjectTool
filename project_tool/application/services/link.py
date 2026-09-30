@@ -112,6 +112,13 @@ class LinkService:
         return self.ctx.save(link, base, "link.removed", {})
 
     def link_resolve(self, name) -> dict[str, Any]:
+        """解析一个 link 目标。
+
+        `resolved` 的语义是**真的能拿到对方项目的数据**，不是「我填了地址」。
+        Project Tool 没有服务器也不发网络请求（docs/06 §V2），所以只有
+        `local_project` 能真正解析；其它 kind 一律 `resolved=false` 并说明原因——
+        报告一个自己没验证过的 `true` 比报 `false` 更糟。
+        """
         link = self._link(name)
         result: dict[str, Any] = {
             "id": link.id,
@@ -140,12 +147,19 @@ class LinkService:
                         result["project"] = {"id": data.get("id"), "name": data.get("name")}
                     except ProjectToolError as exc:
                         result["error"] = exc.message
-        elif link.target.kind in (
-            LinkKind.REMOTE_PROJECT,
-            LinkKind.GIT_REPOSITORY,
-            LinkKind.EXTERNAL,
-        ):
-            result["resolved"] = bool(link.target.locator or link.target.project_id)
+            if not result["resolved"] and "error" not in result:
+                result["error"] = "no .pjt/project.json at the local path"
+        else:
+            # remote_project / git_repository / external：记录是有效的，但无法解析。
+            result["resolved"] = False
+            result["verifiable"] = False
+            result["error"] = (
+                f"{link.target.kind.value} links are recorded but not dereferenceable: "
+                "Project Tool has no server and makes no network requests "
+                "(docs/06 §V2). Use kind=local_project for a resolvable link."
+            )
+            if not (link.target.locator or link.target.project_id):
+                result["error"] = "link has neither locator nor project_id"
         if not result["resolved"] and "error" not in result:
             result["error"] = "target not found"
         return result

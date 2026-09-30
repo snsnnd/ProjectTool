@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from project_tool.domain.area_paths import find_matching_paths, normalize_path_pattern
 from project_tool.domain.artifact_locator import verify_locator
 from project_tool.domain.enums import ArtifactKind, Lifecycle
 from project_tool.domain.errors import ProjectToolError
@@ -256,6 +257,61 @@ def run_doctor(ctx) -> dict[str, Any]:
             f"{locator_checked} verifiable artifact locator(s) valid",
         )
 
+    # ------------------------------------------------------ area path patterns
+    # 只有**填了** path_patterns 的 Area 才检查；没填的是纯语义 Area，不该被报。
+    # 语义分层：pattern 越界 = error（手改对象破坏了安全不变量）；
+    #           pattern 匹配不到任何文件 = warning（目录改名/重命名后的悬挂）。
+    pattern_unsafe: list[str] = []
+    pattern_dangling: list[str] = []
+    pattern_checked = 0
+    bindable = [
+        record
+        for record in records_by_type.get("area", [])
+        if record.get("lifecycle") != Lifecycle.DELETED.value
+        and record.get("path_patterns")
+    ]
+    if bindable:
+        matched_cache: dict[str, list[str]] = {}
+        for record in bindable:
+            area_id = str(record.get("id"))
+            for pattern in record.get("path_patterns") or []:
+                try:
+                    check_locator_like(pattern)
+                except ProjectToolError as exc:
+                    pattern_unsafe.append(f"{area_id}: {pattern!r} {exc.message}")
+                    continue
+                pattern_checked += 1
+                if pattern not in matched_cache:
+                    matched_cache[pattern] = find_matching_paths(
+                        ctx.paths.root, [pattern]
+                    )[pattern]
+                if not matched_cache[pattern]:
+                    pattern_dangling.append(
+                        f"{area_id}: pattern {pattern!r} matches no file under the project root "
+                        "(directory renamed or moved?)"
+                    )
+    if pattern_unsafe:
+        add(
+            "areas.path_patterns",
+            "error",
+            f"{len(pattern_unsafe)} unsafe area path pattern(s)",
+            pattern_unsafe,
+        )
+    elif pattern_dangling:
+        add(
+            "areas.path_patterns",
+            "warning",
+            f"{len(pattern_dangling)} area path pattern(s) match nothing "
+            f"(of {pattern_checked} checked)",
+            pattern_dangling,
+        )
+    elif pattern_checked:
+        add(
+            "areas.path_patterns",
+            "ok",
+            f"{pattern_checked} area path pattern(s) match at least one file",
+        )
+
     # ------------------------------------------------------------- dependencies
     try:
         # check_rev=False：doctor 必须能在 rev 已损坏时把对象读出来，否则第一条坏数据
@@ -439,6 +495,11 @@ def run_doctor(ctx) -> dict[str, Any]:
             "repairable": repairable_count,
         },
     }
+
+
+def check_locator_like(pattern: str) -> str:
+    """复用 Area 写入时的同一套校验（doctor 不能给不同的结论）。"""
+    return normalize_path_pattern(pattern)
 
 
 def _hierarchy_cycles(ctx, records_by_type: dict[str, list[dict[str, Any]]]) -> list[str]:
