@@ -42,13 +42,24 @@ class RevisionConflict(ProjectToolError):
     code = "REVISION_CONFLICT"
     exit_code = 5
 
-    def __init__(self, message: str, expected_rev: str | None = None, actual_rev: str | None = None, entity_id: str | None = None):
+    def __init__(
+        self,
+        message: str,
+        expected_rev: str | None = None,
+        actual_rev: str | None = None,
+        entity_id: str | None = None,
+    ):
         details = {"expected_rev": expected_rev, "actual_rev": actual_rev, "entity_id": entity_id}
         super().__init__(message, details)
 
 
 class DependencyCycle(ProjectToolError):
     code = "DEPENDENCY_CYCLE"
+    exit_code = 3
+
+
+class HierarchyCycle(ProjectToolError):
+    code = "HIERARCHY_CYCLE"
     exit_code = 3
 
 

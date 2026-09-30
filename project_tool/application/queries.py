@@ -1,10 +1,12 @@
-"""查询逻辑：项目状态、日志、工作量。"""
+"""查询逻辑：项目状态、日志、工作量（读取 ServiceContext）。"""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from project_tool.domain.enums import Lifecycle, MilestoneStatus, TaskStatus
+from project_tool.domain.errors import NotFound
 from project_tool.domain.timeutil import parse_time_spec
 from project_tool.graph.dependency import is_computed_blocked
 from project_tool.graph.project_graph import milestone_summary, task_summary
@@ -26,10 +28,10 @@ def event_summary(record: dict[str, Any], include_payload: bool = True) -> dict[
     return summary
 
 
-def project_status(service, recent_limit: int = 10) -> dict[str, Any]:
-    tasks = {task.id: task for task in service.store.list_models("task")}
-    milestones = service.store.list_models("milestone")
-    goals = service.store.list_models("goal")
+def project_status(ctx, recent_limit: int = 10) -> dict[str, Any]:
+    tasks = {task.id: task for task in ctx.store.list_models("task")}
+    milestones = ctx.store.list_models("milestone")
+    goals = ctx.store.list_models("goal")
 
     status_counts: dict[str, int] = {status.value: 0 for status in TaskStatus}
     for task in tasks.values():
@@ -61,11 +63,11 @@ def project_status(service, recent_limit: int = 10) -> dict[str, Any]:
 
     recent = [
         event_summary(record)
-        for record in service.events.iter_records(newest_first=True)[:recent_limit]
+        for record in ctx.events.iter_records(newest_first=True)[:recent_limit]
     ]
 
     workloads: list[dict[str, Any]] = []
-    for member in sorted(service.store.list_models("member"), key=lambda item: item.id):
+    for member in sorted(ctx.store.list_models("member"), key=lambda item: item.id):
         if not getattr(member, "active", False) or member.lifecycle != Lifecycle.ACTIVE:
             continue
         owned = [
@@ -95,12 +97,12 @@ def project_status(service, recent_limit: int = 10) -> dict[str, Any]:
             "enabled": link.enabled,
             "locator": link.target.locator,
         }
-        for link in service.store.list_models("link")
+        for link in ctx.store.list_models("link")
         if link.lifecycle == Lifecycle.ACTIVE
     ]
 
     return {
-        "project": service.opened.project.to_record(),
+        "project": ctx.opened.project.to_record(),
         "goals": [
             {"id": goal.id, "title": goal.title, "status": goal.status.value}
             for goal in sorted(goals, key=lambda item: item.id)
@@ -117,7 +119,7 @@ def project_status(service, recent_limit: int = 10) -> dict[str, Any]:
 
 
 def log_list(
-    service,
+    ctx,
     entity_type: str | None = None,
     entity_id: str | None = None,
     event_type: str | None = None,
@@ -129,18 +131,18 @@ def log_list(
 ) -> dict[str, Any]:
     full_entity_id = None
     if entity_id:
-        found = service.store.find(entity_id)
+        found = ctx.store.find(entity_id)
         full_entity_id = found[1] if found else str(entity_id).upper()
 
     actor_id = None
     if member:
-        actor_id = service._member_id(member)
+        actor_id = ctx.member_id(member)
 
     since_dt = parse_time_spec(since) if since else None
     until_dt = parse_time_spec(until) if until else None
     limit = max(1, min(int(limit), 500))
 
-    records = service.events.iter_records(newest_first=True)
+    records = ctx.events.iter_records(newest_first=True)
     matched: list[dict[str, Any]] = []
     for record in records:
         if cursor and str(record.get("id", "")) >= cursor:
@@ -157,8 +159,6 @@ def log_list(
             continue
         occurred_at = record.get("occurred_at")
         if since_dt or until_dt:
-            from datetime import datetime
-
             try:
                 moment = datetime.fromisoformat(str(occurred_at))
             except ValueError:
@@ -179,13 +179,11 @@ def log_list(
     }
 
 
-def member_workload(service, member_id: str) -> dict[str, Any]:
-    record = service.store.get_raw("member", member_id)
+def member_workload(ctx, member_id: str) -> dict[str, Any]:
+    record = ctx.store.get_raw("member", member_id)
     if record is None:
-        from project_tool.domain.errors import NotFound
-
         raise NotFound(f"member {member_id} not found")
-    tasks = {task.id: task for task in service.store.list_models("task")}
+    tasks = {task.id: task for task in ctx.store.list_models("task")}
     owned = [task for task in tasks.values() if member_id in task.owner_ids]
     by_status: dict[str, list[dict[str, Any]]] = {}
     for task in sorted(owned, key=lambda item: item.id):

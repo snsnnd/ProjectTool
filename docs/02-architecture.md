@@ -1,4 +1,4 @@
-# Project Tool — 架构设计
+# Project Tool — 架构设计（V0.1）
 
 ## 1. 总体风格
 
@@ -32,73 +32,76 @@ Ports & Adapters / Clean Architecture。依赖方向永远向内：
 Application Service → Remote Adapter → Project Server (FastAPI + PostgreSQL)
 ```
 
-## 2. 模块结构（V0 实际代码）
+## 2. 模块结构（V0.1 实际代码）
 
 ```text
 project_tool/
 │
 ├── domain/                 # 纯领域层，无 I/O
-│   ├── ids.py              # ULID 生成、ID 前缀、短 ID 解析
+│   ├── ids.py              # ULID、ID 前缀、短 ID 解析
 │   ├── hashing.py          # canonical JSON 与 rev 计算
 │   ├── base.py             # BaseObject / Header
-│   ├── project.py          # Project
-│   ├── goal.py             # Goal
-│   ├── milestone.py        # Milestone
-│   ├── task.py             # Task、Priority、TaskStatus、Dependency
-│   ├── member.py           # Member
-│   ├── update.py           # Update
-│   ├── decision.py         # Decision
-│   ├── link.py             # Project Link
-│   ├── event.py            # Event
-│   ├── enums.py            # 所有状态枚举与类型常量
-│   └── errors.py           # 错误码与异常
+│   ├── project.py          # Project（含 version/rev/actor）
+│   ├── goal.py / milestone.py / task.py / member.py
+│   ├── update.py / decision.py / link.py / event.py
+│   ├── enums.py            # 状态枚举与类型常量
+│   ├── validation.py       # 标题/文本/标签长度与形态约束
+│   └── errors.py           # 错误码与异常（含 HIERARCHY_CYCLE）
 │
 ├── storage/                # 持久化适配器（唯一接触 .pjt 的层）
-│   ├── project_store.py    # init/open/find，ProjectPaths
+│   ├── project_store.py    # init/open/find，ProjectPaths，派生 state
 │   ├── object_store.py     # 对象读写、短 ID 解析、集合映射
-│   ├── event_store.py      # 事件追加与查询
-│   ├── transaction.py      # staging + 原子改名 + 锁
-│   ├── local_state.py      # .pjt/local/local.toml、device_id、锁文件
+│   ├── event_store.py      # 事件 append-only 查询
+│   ├── transaction.py      # staging + manifest + COMMIT + 原子 apply
+│   ├── recovery.py         # scan / roll-forward / 幂等恢复
+│   ├── local_state.py      # local.toml、device_id、WriteLock（PID+token）
 │   └── migrations.py       # schema_version 校验与迁移入口
 │
 ├── application/            # 用例层
-│   ├── service.py          # ProjectService：所有 method 的入口
-│   ├── queries.py          # status / progress / log / workload
-│   └── doctor.py           # 完整性检查
+│   ├── service.py          # ProjectService：组合 + call/handle
+│   ├── registry.py         # 显式 MethodSpec 注册（mutating/category）
+│   ├── context.py          # ServiceContext：共享解析/校验/写路径
+│   ├── services/           # 领域服务（按 use-case 拆分）
+│   │   ├── project.py / system.py / goal.py / milestone.py
+│   │   ├── task.py / member.py / update.py / decision.py
+│   │   └── link.py / log.py / graph.py
+│   ├── queries.py          # status / log / workload
+│   └── doctor.py           # 完整性检查（repairable 标记）
 │
 ├── graph/                  # 图算法
-│   ├── dependency.py       # 环检测、computed blocked
-│   └── project_graph.py    # 任务树 / 项目树构建
+│   ├── dependency.py       # 依赖环、computed blocked
+│   └── project_graph.py    # 任务树 / 项目树 / 里程碑进度
 │
-├── cli/
-│   └── main.py             # Typer CLI（pjt）
+├── integrations/           # 外部系统适配（V1：git.py）
+│   └── filesystem.py       # 原子写、fsync_dir、JSON 读写
 │
-└── integrations/           # 外部系统适配（V1：git.py、filesystem.py 已有原子写）
-```
-
-后续（V1/V2）新增目录，不改变上述依赖方向：
-
-```text
-api/        # FastAPI Local Server（V1）
-sync/       # push/pull/conflicts（V2）
-integrations/git.py   # Git Adapter（V1）
-web/        # React + TypeScript（V1，独立包）
+└── cli/
+    ├── main.py             # Typer root + 全局选项 + 子命令注册
+    ├── common.py           # CliState / execute / 错误映射（仅调 Service）
+    ├── render.py           # 输出渲染
+    ├── project.py          # init/status/doctor/migrate
+    ├── task.py / goal.py / milestone.py / member.py
+    ├── update.py / decision.py / link.py / log.py / graph.py
+    └── __init__.py
 ```
 
 ## 3. 依赖规则
 
 ```text
-domain       必须零依赖（只允许标准库 + pydantic）
+domain       零依赖（标准库 + pydantic）
 storage      只依赖 domain
 graph        只依赖 domain
 application  依赖 domain/storage/graph
-cli          依赖 application（绝不直接 import storage）
+cli          依赖 application（绝不 import storage / filesystem）
 ```
 
 CI 与 review 需要拒绝的写法：
 
 ```python
-# 错误：CLI 直接操作文件
+# 错误：CLI 直接操作文件 / storage
+from project_tool.storage import ObjectStore
+
+# 错误：领域服务绕过 ServiceContext 直接写文件
 Path(".pjt/objects/tasks/...").write_text(...)
 
 # 错误：Core 依赖 Web
@@ -124,44 +127,56 @@ from project_tool.api import ...   # 出现在 application/ 以下
 }
 ```
 
-- `method` 命名：`<domain>.<action>`，与 CLI 子命令、未来 REST 路由一一对应。
-- `params` 校验失败 → `INVALID_ARGUMENT`；找不到 → `NOT_FOUND`。
-- CLI `--json` 输出 RPC 响应；默认输出人类可读文本。
+- method 名称 `<domain>.<action>`，与 CLI 子命令、未来 REST 路由一一对应。
+- **显式 registry**（`application/registry.py`）：每个 method 注册
+  `MethodSpec(name, handler, mutating, category, description)`；
+  未知 method → `INVALID_ARGUMENT`。V0.1 共 83 个 method。
+- `system.capabilities` 返回 `protocol_version / schema_version / methods / features`，
+  供 Web / SDK 做能力发现；features 当前全部为 false（artifact/git/search/web/remote/sync）。
+- `ProjectService.call(method, params)` 与 `handle(...)` 与 V0 完全兼容。
 
 ## 5. 写路径（所有修改共用一条）
 
 ```text
 Command
-  ↓ 解析参数、补全 Actor、解析短 ID
-Validate（对象存在、引用有效、状态合法、无依赖环）
+  ↓ 解析参数、补全 Actor、解析短 ID、领域校验
+Validate（引用存在且未删除、层级/依赖无环、milestone 开放…）
   ↓
-Acquire write lock（.pjt/local/locks/write.lock）
+Acquire WriteLock（PID+token；活进程锁不可偷）
   ↓
-Load objects（canonical JSON）
+Load objects
   ↓
-Check expected_rev（若调用方给了 rev）
+Check base_rev（不匹配 -> REVISION_CONFLICT）
   ↓
 Build new objects + events（version+1、updated_at、rev）
   ↓
-Stage 到 .pjt/transactions/<TXN-…>/
+Stage 到 .pjt/transactions/<TXN-…>/staged/
   ↓
-原子 rename 到 objects/ 与 events/
+写 manifest（prepared）→ 写 COMMIT → fsync
   ↓
-更新派生缓存（state.json、refs/labels.json）
+roll-forward apply（对象先、事件后，os.replace）
+  ↓
+manifest applied → 更新派生 state → 删除事务目录
   ↓
 Release lock
 ```
 
-任何一步失败：staging 目录直接丢弃，canonical 数据未被触碰。
-锁内不做网络与 UI 操作，事务保持毫秒级。
+崩溃语义见 [04-storage.md](04-storage.md) 与 [07-v0.1-audit.md](07-v0.1-audit.md)：
+
+```text
+COMMIT 之前失败 -> staging 丢弃，canonical 未被触碰
+COMMIT 之后失败 -> 目录保留，doctor --repair / project.recover roll-forward（幂等）
+```
+
+SQLite（V1）失败不回滚 canonical 数据；索引只是缓存。
 
 ## 6. 读路径
 
 ```text
-Query → Application Service → 扫描 objects/ + events/ → 领域计算（progress/blocked/graph）
+Query → Application Service → 扫描 objects/ + events/ → 领域计算
 ```
 
-- V0 直接扫描文件（项目规模 < 10⁴ 对象，性能足够）。
+- V0.1 直接扫描文件（项目规模 < 10⁴ 对象，性能足够）。
 - V1 增加 `.pjt/local/index.sqlite` 只读缓存，可随时 `pjt index rebuild`。
 - 任何缓存失效都必须回退到文件扫描，而不是报错。
 
@@ -171,11 +186,13 @@ Query → Application Service → 扫描 objects/ + events/ → 领域计算（p
 |---|---|
 | 一个对象一个文件 | 不同成员改不同任务 → 不同文件 → Git merge 友好 |
 | ULID 而非自增编号 | 离线多人创建不冲突；ULID 字典序即时间序 |
-| rev 为内容哈希 | 并发控制、同步收敛、缓存键三合一 |
+| rev 为内容哈希（含 Project） | 并发控制、同步收敛、缓存键三合一 |
 | Snapshot + Event 双写 | objects 回答“现在”，events 回答“为什么” |
+| crash-recoverable 事务 | 明确 roll-forward 保证，不宣称 ACID |
 | 删除 = lifecycle 变更 | 同步才能传播“删除”这一事实 |
 | 进度不落库 | 由 Task 状态/weight 推导，避免误导性百分比 |
 | computed blocked 不写状态 | 区分人为 blocked 与依赖 blocked |
+| 显式 registry | REST / SDK / 权限 / 审计的基础 |
 | SQLite 可删 | canonical 永远是 project.json + objects/ + events/ |
 | 不接管 Git | V0 完全不碰 Git；V1 只读集成 |
 
@@ -183,8 +200,8 @@ Query → Application Service → 扫描 objects/ + events/ → 领域计算（p
 
 - **Actor**：`created_by` / `updated_by` / 事件 `actor_id` 的来源。
   解析顺序：`--as` 参数 > `PJT_ACTOR` 环境变量 > `.pjt/local/local.toml` > 第一个 active member > `null`。
-  在 Member 加入前产生的项目初始化事件允许 `actor_id = null`。
-- **Device**：首次 `pjt init` 生成 `DEV-XXXXXXXX` 存入 `local.toml`，用于事件溯源区分设备。
+  Member 加入前产生的事件允许 `actor_id = null`。
+- **Device**：首次 `pjt init` 生成 `DEV-XXXXXXXX` 存入 `local.toml`，事件溯源区分设备。
 
 ## 9. 错误模型
 
@@ -192,9 +209,12 @@ Query → Application Service → 扫描 objects/ + events/ → 领域计算（p
 
 ```text
 INVALID_ARGUMENT  NOT_FOUND  ALREADY_EXISTS  CONFLICT  REVISION_CONFLICT
-DEPENDENCY_CYCLE  BROKEN_LINK  PERMISSION_DENIED  AUTH_REQUIRED
-REMOTE_UNAVAILABLE  SYNC_CONFLICT  SCHEMA_UNSUPPORTED  PROJECT_CORRUPTED
-GIT_ERROR  IO_ERROR  INTERNAL
+DEPENDENCY_CYCLE  HIERARCHY_CYCLE  BROKEN_LINK
+PERMISSION_DENIED  AUTH_REQUIRED  REMOTE_UNAVAILABLE  SYNC_CONFLICT
+SCHEMA_UNSUPPORTED  PROJECT_CORRUPTED  GIT_ERROR  IO_ERROR  INTERNAL
 ```
+
+`HIERARCHY_CYCLE`（V0.1 新增）用于 goal parent / task parent / decision supersede
+链环检测；`DEPENDENCY_CYCLE` 专用于 task dependency 图。
 
 详见 [05-interfaces.md](05-interfaces.md)。

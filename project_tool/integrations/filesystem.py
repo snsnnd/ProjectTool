@@ -46,6 +46,23 @@ def read_json(path: Path) -> Any:
         raise ProjectIOError(f"invalid JSON in {path}: {exc}") from exc
 
 
+def fsync_dir(path: Path) -> None:
+    """尽力 fsync 目录项（POSIX）；Windows 等不支持时静默跳过。"""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
 def _silent_unlink(path: str | Path) -> None:
     try:
         os.unlink(path)

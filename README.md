@@ -25,11 +25,15 @@ my-project/
 | 能力 | 状态 |
 |---|---|
 | `.pjt` 存储（一对象一文件 / ULID / rev / lifecycle） | ✅ |
-| 事务（staging + 原子 rename + 写锁 + base_rev 校验） | ✅ |
+| Project 参与 revision concurrency（`expected_rev`） | ✅ |
+| Crash-Recoverable Transaction（manifest + COMMIT + roll-forward） | ✅ |
+| 写锁（PID 判活 + ownership token） | ✅ |
 | 对象：Project / Goal / Milestone / Task / Member / Update / Decision / Link | ✅ |
-| 不可变 Event 历史 | ✅ |
-| 依赖图（环检测 / computed blocked / 加权进度） | ✅ |
-| CLI：init / status / doctor / migrate / goal / milestone / task / member / update / decision / link / log / graph | ✅ |
+| 不可变 Event 历史 + event 链校验 | ✅ |
+| 依赖图 / 层级环检测（DEPENDENCY_CYCLE / HIERARCHY_CYCLE） | ✅ |
+| 显式 method registry + `system.capabilities` | ✅ |
+| CLI：init / status / doctor [--repair] / migrate / goal / milestone / task / member / update / decision / link / log / graph | ✅ |
+| ruff + mypy + CI | ✅ |
 | Artifact / Git Adapter / Search / SQLite 索引 / Local Web UI | V1 |
 | Remote Server / Sync / Accounts / Webhook / SDK | V2 |
 | KC 集成 | V3 |
@@ -38,10 +42,12 @@ my-project/
 
 - [01-overview.md](docs/01-overview.md) — 产品定义与边界
 - [02-architecture.md](docs/02-architecture.md) — 架构设计
-- [03-data-model.md](docs/03-data-model.md) — 领域数据模型
-- [04-storage.md](docs/04-storage.md) — 存储与一致性
+- [03-data-model.md](docs/03-data-model.md) — 领域数据模型与校验规则
+- [04-storage.md](docs/04-storage.md) — 存储、写锁与恢复协议
 - [05-interfaces.md](docs/05-interfaces.md) — Service API / CLI / 错误码
 - [06-roadmap.md](docs/06-roadmap.md) — 路线图与验收标准
+- [07-v0.1-audit.md](docs/07-v0.1-audit.md) — V0.1 架构审计与硬化
+- [08-events.md](docs/08-events.md) — Event contract
 
 ## 快速开始
 
@@ -119,9 +125,11 @@ pjt graph [tasks|milestone MLS-x|projects]
 ## 开发
 
 ```bash
-uv sync              # 安装依赖（含 dev）
-uv run pytest        # 运行测试
-uv run pjt --help    # 运行 CLI
+uv sync                # 安装依赖（含 dev）
+uv run ruff check .    # 静态检查
+uv run mypy project_tool
+uv run pytest          # 运行测试
+uv run pjt --help      # 运行 CLI
 ```
 
 架构约束（详见 docs/02-architecture.md）：

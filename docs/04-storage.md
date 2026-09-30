@@ -1,10 +1,10 @@
-# Project Tool — 存储与一致性设计
+# Project Tool — 存储与一致性设计（V0.1）
 
 ## 1. `.pjt` 目录规范
 
 ```text
 .pjt/
-├── project.json            # Project 对象（canonical）
+├── project.json            # Project 对象（canonical，含 version/rev）
 ├── config.toml             # 项目级配置（canonical）
 │
 ├── objects/                # canonical：一个对象一个文件
@@ -31,9 +31,10 @@
 │   ├── index.sqlite        # V1 索引缓存
 │   ├── conflicts/          # V2 冲突文件
 │   ├── backups/            # migrate 前备份
-│   └── locks/              # 写锁
+│   └── locks/              # write.lock
 │
-└── transactions/           # 事务 staging，永不进 Git
+└── transactions/           # 事务工作区，永不进 Git
+    └── TXN-…/              # manifest.json + COMMIT + staged/
 ```
 
 `pjt init` 自动生成 `.gitignore`（追加，不覆盖已有内容）：
@@ -46,134 +47,161 @@
 **canonical = `project.json` + `objects/` + `events/`。**
 只要这三者存在，Project Tool 数据就能恢复；`refs/`、`state/`、SQLite、Web、Server 全部是派生物。
 
-## 2. 为什么一对象一文件
-
-```text
-错误：所有任务塞进一个 project.json
-→ A 改 TASK-01、B 改 TASK-32，仍然形成同一个文件的 Git 冲突
-
-正确：一个任务一个文件
-→ 不同任务 = 不同文件 = Git merge 友好
-```
-
-事件同理：`.pjt/events/2026/09/EVT-….json`，而不是 `events.json`。
-事件文件名天然唯一（ULID），多人追加互不冲突。
-
-## 3. 磁盘格式
+## 2. 磁盘格式
 
 - 对象文件按 `sort_keys=True, indent=2` 落盘（diff 友好）；`rev` 按 canonical（无缩进、无空格）计算。
 - 时间戳统一带时区：`2026-09-30T14:20:01+08:00`。
 - 编码 UTF-8、`ensure_ascii=False`（中文可读）。
-- 原子写：临时文件 → `flush + fsync` → `os.replace`。
+- 原子写：临时文件 → `flush + fsync` → `os.replace`；目录项尽力 `fsync`（Windows 自动跳过）。
 
-## 4. rev 与并发控制
-
-```text
-canonical JSON → 删除 rev 字段 → SHA-256 → "sha256:…"
-```
-
-使用场景：
-
-| 场景 | 用法 |
-|---|---|
-| 本地并发 | `set_status` 等操作可传 `expected_rev`，不匹配 → `REVISION_CONFLICT` |
-| 未来 REST | `ETag: "sha256:…"` + `If-Match`，不匹配 → `409 CONFLICT` |
-| 未来同步 | 比较两端 rev 判断“谁改了” |
-| 缓存 | 索引缓存键 |
-
-每次成功修改：`version += 1`，`updated_at = now`，重算 `rev`。
-
-## 5. 事务（Transaction）
-
-一次命令可能同时影响多个对象，例如 `pjt task done TSK-X`：
+## 3. rev 与并发控制
 
 ```text
-Task.status → done
-Task.completed_at → now
-Event task.status_changed
+rev = "sha256:" + sha256( canonical_json(object without "rev") )
 ```
 
-流程：
+- **所有对象**（含 Project）都带 `version` / `rev` / `created_by` / `updated_by`。
+- 更新时：`version += 1`，`updated_at = now`，重算 `rev`。
+- 显式并发控制：`task.set_status(expected_rev=…)`、`project.update(expected_rev=…)`
+  不匹配 → `REVISION_CONFLICT`。
+- 默认并发控制：每个事务在写入前重新校验全部 `base_rev`，任何对象在“读取→提交”
+  之间被改动都会以 `REVISION_CONFLICT` 拒绝，不会静默覆盖。
+
+## 4. Crash-Recoverable Transaction 协议
+
+V0.1 **不宣称**多文件 ACID 原子提交，而是提供明确保证：
 
 ```text
-1  获取写锁（.pjt/local/locks/write.lock）
-2  读取对象、校验 expected_rev
-3  构造新对象（version+1 / updated_at / rev）与事件清单
-4  全部写入 staging：.pjt/transactions/<TXN-ULID>/objects/... events/...
-5  fsync 后逐个 os.replace 到最终路径（objects 先、events 后）
-6  更新派生缓存（state.json、refs/labels.json）
-7  删除 staging，释放写锁
+崩溃可检测
+状态可判断
+恢复可重复（幂等）
+恢复结果确定（roll-forward）
 ```
 
-- staging 目录残留 = 上次事务中途失败；`pjt doctor` 报告，可直接删除。
-- 不存在“半写对象”：每个文件本身是原子替换；极端断电下可能出现“对象已更新、事件未落盘”，doctor 通过 rev/事件比对发现。
-- **SQLite 索引失败不回滚 canonical 数据**；索引是缓存，`pjt index rebuild`（V1）即可恢复。
+事务目录结构：
 
-### 写锁
+```text
+.pjt/transactions/TXN-…/
+├── manifest.json
+├── COMMIT              # 提交标记（manifest 之后写入）
+└── staged/             # 与 .pjt 相对路径镜像的暂存文件
+```
 
-- 实现：`O_CREAT|O_EXCL` 创建锁文件，写入 `pid + 时间`，默认等待 10s。
-- 锁文件 mtime 超过 60s 视为陈旧锁，自动清除（进程崩溃恢复）。
-- 锁粒度：整个项目一个写锁。写操作本身毫秒级，V0 不需要更细粒度。
-
-## 6. state 与 refs（派生数据）
-
-`state/state.json`：
+manifest 至少包含：
 
 ```json
 {
   "schema_version": "1.0",
-  "last_transaction_id": "TXN-01K8HB38ZF",
-  "object_count": 83,
-  "event_count": 421,
-  "updated_at": "2026-09-30T14:20:01+08:00"
+  "transaction_id": "TXN-…",
+  "state": "prepared",
+  "created_at": "…",
+  "actor_id": "MBR-…",
+  "device_id": "DEV-…",
+  "writes": [
+    { "kind": "object", "target": "objects/tasks/TSK-….json",
+      "base_rev": "sha256:…", "new_rev": "sha256:…" },
+    { "kind": "event", "target": "events/2026/09/EVT-….json",
+      "event_id": "EVT-…", "base_rev": null, "new_rev": null }
+  ]
 }
 ```
 
-`refs/labels.json`：项目内出现过的 label 去重集合。
-
-两者都可删除重建（doctor 可校验/修复）。它们**不是**数据源，任何逻辑不得以它们为准。
-
-## 7. 数据完整性
-
-`pjt doctor` 检查项：
+提交顺序（在 WriteLock 内执行）：
 
 ```text
-project.json 可解析、schema 版本受支持
-每个对象：JSON 可解析、rev 匹配、id/type/project_id/集合目录一致
-引用完整：milestone_id / goal_ids / owner_ids / parent_task_id / dependencies
-          task_ids / supersedes_id 指向存在的对象
-依赖无环
-member.handle 唯一
-事件：可解析、entity 存在（project.initialized 除外）
-staging 残留、state/labels 与对象不一致（warning）
+1 校验全部 base_rev（不匹配 -> REVISION_CONFLICT，未提交即丢弃）
+2 写入 staged/（对象先、事件后）
+3 落 manifest（state=prepared）并 fsync
+4 落 COMMIT 标记并 fsync
+5 roll-forward apply：对象与事件逐个 os.replace
+6 manifest -> applied，更新派生 state，删除事务目录
 ```
 
-输出三档：`OK` / `WARNING`（可继续） / `ERROR`（退出码 9）。
+- **第 4 步之前失败**：直接清空 staging，canonical 未被触碰。
+- **第 4 步之后失败**：事务目录保留（manifest + COMMIT + 残留 staged），
+  `pjt doctor --repair` / `project.recover` 会 roll-forward。
+- 不存在 rollback journal：apply 只把 staged 替换到 canonical，且以 `new_rev`
+  判定是否已生效，因此重复 apply 幂等。
 
-## 8. Schema 版本与迁移
+## 5. 恢复（storage/recovery.py）
+
+```text
+scan_transactions()     列出事务目录并分类
+recover_transaction()   单个事务的恢复
+recover_all()           全量恢复（doctor --repair / project.recover 调用）
+```
+
+scan 分类：
+
+| status | 条件 | 处理 |
+|---|---|---|
+| `uncommitted` | 无 COMMIT（含只有 staging / 只有 prepared manifest） | 安全丢弃 |
+| `prepared` | 有效 manifest + COMMIT | roll-forward |
+| `applied` | manifest state=applied 但目录未清理 | 补写 state 后清理 |
+| `invalid` | manifest 缺失/损坏 | 无 COMMIT → 丢弃（repairable）；有 COMMIT → 保留待人工检查 |
+
+恢复输出 `RecoveryResult(action)`：
+
+```text
+discarded       已丢弃未提交事务
+rolled_forward  已提交事务已补全
+error           冲突或无法恢复（保留现场，doctor 报 error）
+```
+
+恢复是幂等的；冲突（目标对象被第三方改成第三个 rev）会保留事务目录并报告，
+不做猜测性覆盖。
+
+## 6. 写锁（WriteLock）
+
+锁文件 `.pjt/local/locks/write.lock` 为 JSON：
+
+```json
+{ "pid": 12345, "lock_id": "LCK-…", "created_at": 1759…, "host": "…" }
+```
+
+规则：
+
+1. `O_CREAT|O_EXCL` 创建，默认等待 10s，超时 → `CONFLICT`。
+2. **PID 存活 → 永不偷锁**（POSIX `os.kill(pid,0)`；Windows `OpenProcess` 兼容）；
+   不再仅凭 `mtime > 60s` 判断，合法长操作不会被抢。
+3. PID 死亡或不可解析，且超过 `stale_after`（默认 60s）→ 视为陈旧，可回收。
+4. 释放时只在 `lock_id` 与自身一致时删除；锁被他人替换后绝不误删。
+5. `pjt doctor --repair` 会清理陈旧锁；持有者是活进程时 repair 会失败并提示。
+
+## 7. state 与 refs（派生数据）
+
+`state/state.json`：`last_transaction_id / object_count / event_count / updated_at`。
+`refs/labels.json`：项目内 label 去重集合。
+
+两者都可删除重建，**不是**数据源；任何逻辑不得以它们为准。
+
+## 8. 数据完整性（pjt doctor）
+
+```text
+project.json：header、schema、rev（legacy 无 rev -> warning）
+每个对象：JSON、rev、id/type/project_id/集合目录一致
+引用完整：milestone/goal/owner/parent/dependency/task_ids/supersedes
+依赖无环 + 层级无环（goal parent / task parent / decision supersede）
+member.handle 唯一
+events：可解析、entity 存在、base_rev/new_rev 链一致、对象 rev 与最后事件一致
+transactions：未完成 / 已提交未应用 / manifest 损坏（标注能否自动恢复）
+write.lock：活锁 / 陈旧锁
+refs/state 存在性
+```
+
+每个 check 带 `repairable` 标记；`pjt doctor --repair` 先执行
+`project.recover`（roll-forward + 清理陈旧锁）再重新检查。
+doctor 发现 error 时退出码 9。
+
+## 9. Schema 版本与迁移
 
 - 所有对象 `schema_version = "1.0"`。
-- Major 变化不兼容；Minor 向后兼容地加字段。
 - 工具遇到 `2.x` 而只支持 `1.x`：**拒绝写入**，尽量只读，不得偷偷修改。
-- `pjt migrate` 逐级执行 `1.0 → 1.1 → …`；执行前自动备份到 `.pjt/local/backups/`。
+- `pjt migrate` 逐级执行；执行前自动备份到 `.pjt/local/backups/`（V0.1 无实际迁移步骤）。
 
-## 9. 本地状态与路径
+## 10. 本地状态与安全
 
-`.pjt/local/local.toml`：
-
-```toml
-[local]
-device_id = "DEV-F12A81"
-actor = "MBR-01K8H61N2B"
-
-[links.firmware]
-path = "D:/workspace/firmware"
-```
-
-- 机器特定绝对路径只能出现在这里；link 对象里只存相对路径/URL/project ID。
-- 该文件被 `.gitignore` 排除，绝不提交。
-
-## 10. 安全原则
+`.pjt/local/local.toml` 保存 `device_id`、默认 `actor`、机器特定绝对路径映射。
 
 `.pjt` 默认禁止保存：
 

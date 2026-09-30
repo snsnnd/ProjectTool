@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from project_tool.domain.enums import DependencyRelation, TaskStatus
 from project_tool.domain.task import Task
 
@@ -54,11 +56,11 @@ def detect_cycles(tasks: dict[str, Task]) -> list[list[str]]:
             continue
         color[start] = GRAY
         path = [start]
-        stack: list[tuple[str, object]] = [(start, iter(graph.get(start, [])))]
+        stack: list[tuple[str, Iterator[str]]] = [(start, iter(graph.get(start, [])))]
         while stack:
             node, iterator = stack[-1]
             advanced = False
-            for nxt in iterator:  # type: ignore[union-attr]
+            for nxt in iterator:
                 if nxt not in graph:
                     continue
                 if color[nxt] == GRAY:

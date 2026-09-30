@@ -12,7 +12,6 @@ from project_tool.domain.decision import Decision
 from project_tool.domain.errors import InvalidArgument, NotFound, ProjectCorrupted
 from project_tool.domain.goal import Goal
 from project_tool.domain.ids import (
-    COLLECTION_BY_TYPE,
     CROCKFORD,
     PREFIX_BY_TYPE,
     TYPE_BY_PREFIX,
@@ -22,7 +21,6 @@ from project_tool.domain.member import Member
 from project_tool.domain.milestone import Milestone
 from project_tool.domain.task import Task
 from project_tool.domain.update import Update
-from project_tool.integrations import filesystem
 
 MODEL_BY_TYPE: dict[str, type[BaseObject]] = {
     "goal": Goal,

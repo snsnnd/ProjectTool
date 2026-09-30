@@ -24,6 +24,24 @@ SQLite 索引 / Local Web UI / React 前端
 
 > 先验证：`.pjt + Core + CLI` 这个模型是否真的好用。
 
+### V0.1 — 架构审计与硬化（当前）
+
+```text
+Project 纳入 revision concurrency control（expected_rev）
+Crash-Recoverable Transaction（manifest + COMMIT + roll-forward，幂等恢复）
+storage/recovery.py + project.recover + pjt doctor --repair
+WriteLock：PID 判活 + ownership token（不误删活锁）
+Service 拆分（application/services/*）+ 显式 registry + system.capabilities
+CLI 拆分（common/render/各域模块），命令保持兼容
+HIERARCHY_CYCLE（goal/task parent、decision supersede）
+引用校验（deleted / inactive / closed milestone）
+Doctor：事务 / 锁 / 事件链 / project rev + repairable 标记
+Event contract（docs/08-events.md）+ 不可变性测试
+ruff + mypy + GitHub Actions CI（Ubuntu + Windows, Python 3.12）
+```
+
+不增加任何用户可见新功能；外部 CLI 行为与 V0 兼容。
+
 ### V1 — 增强与本地 Web
 
 ```text
@@ -77,13 +95,14 @@ KC Admin 使用 @project-tool/embed 组件（ProjectOverview / TaskBoard / Timel
 
 | 模块 | 状态 |
 |---|---|
-| docs（本目录） | ✓ |
-| domain（ids/hashing/models/errors/events） | ✓ |
-| storage（project/object/event/transaction/lock/migrations） | ✓ |
-| application（service/queries/doctor） | ✓ |
+| docs（本目录 + 07 审计 + 08 事件契约） | ✓ |
+| domain（ids/hashing/models/validation/errors/events） | ✓ |
+| storage（project/object/event/transaction/recovery/lock/migrations） | ✓ |
+| application（service/registry/context/services/queries/doctor） | ✓ |
 | graph（dependency/project_graph） | ✓ |
-| cli（Typer，全命令 + --json/--porcelain/--as） | ✓ |
-| tests（pytest） | ✓ |
+| cli（main/common/render + 各域模块 + --json/--porcelain/--as） | ✓ |
+| tests（pytest，118 cases，含故障注入/恢复幂等/锁） | ✓ |
+| ruff + mypy + CI（Ubuntu/Windows + Python 3.12） | ✓ |
 | web/（React） | V1 |
 | api/（FastAPI） | V1 |
 | sync/ | V2 |

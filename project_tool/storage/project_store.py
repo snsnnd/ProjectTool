@@ -18,6 +18,7 @@ from project_tool.domain.errors import (
     SchemaUnsupported,
 )
 from project_tool.domain.event import Event
+from project_tool.domain.hashing import compute_rev
 from project_tool.domain.ids import COLLECTION_BY_TYPE, new_id
 from project_tool.domain.project import Project
 from project_tool.domain.timeutil import now_local
@@ -173,7 +174,10 @@ def init_project(
         created_at=now,
         updated_at=now,
     )
-    filesystem.write_json(paths.project_json, project.to_record())
+    record = project.to_record()
+    record["rev"] = compute_rev(record)
+    project.rev = record["rev"]
+    filesystem.write_json(paths.project_json, record)
     filesystem.atomic_write_text(
         paths.config_toml,
         f'[project]\nschema_version = "{SCHEMA_VERSION}"\n',
@@ -193,6 +197,7 @@ def init_project(
         actor_id=None,
         device_id=local.device_id,
         occurred_at=now,
+        new_rev=project.rev,
         payload={"name": project.name, "slug": project.slug},
     )
     filesystem.write_json(paths.event_dir(now) / f"{event.id}.json", event.to_record())

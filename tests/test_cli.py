@@ -76,3 +76,44 @@ def test_cli_doctor_fails_on_tamper(tmp_path):
     record["title"] = "tampered"
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     assert invoke(["-C", str(tmp_path), "doctor"]).exit_code == 9
+
+
+def test_cli_doctor_repair_cleans_staging(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    staging = tmp_path / ".pjt" / "transactions" / "TXN-CLI-TEST" / "staged" / "objects" / "tasks"
+    staging.mkdir(parents=True)
+    (staging / "TSK-FAKE.json").write_text('{"id": "TSK-FAKE"}', encoding="utf-8")
+
+    result = invoke(["-C", str(tmp_path), "doctor", "--repair"])
+    assert result.exit_code == 0, result.output
+    assert list((tmp_path / ".pjt" / "transactions").iterdir()) == []
+
+
+def test_cli_all_help_pages_build(tmp_path):
+    groups = [None, "task", "goal", "milestone", "member", "update", "decision", "link", "log", "graph"]
+    for group in groups:
+        args = [group, "--help"] if group else ["--help"]
+        result = invoke(args)
+        assert result.exit_code == 0, f"{args}: {result.output}"
+
+
+def test_cli_decision_add_with_title_option(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    result = invoke(
+        [
+            "--json",
+            "-C",
+            str(tmp_path),
+            "decision",
+            "add",
+            "--title",
+            "Use local-first",
+            "--decision",
+            "keep .pjt",
+        ]
+    )
+    assert result.exit_code == 0, result.output
+    decision = json.loads(result.output)["result"]
+    assert decision["title"] == "Use local-first"
+    result = invoke(["-C", str(tmp_path), "decision", "add", "Positional title"])
+    assert result.exit_code == 0, result.output

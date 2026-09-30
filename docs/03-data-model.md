@@ -57,6 +57,9 @@ DEV-F12A81       Device
 | `lifecycle` | `active` / `archived` / `deleted`，删除默认软删除 |
 | `created_by` / `updated_by` | Member ID，可为 `null`（Member 建立前） |
 
+> V0.1 起 `project.json` 同样包含 `version / rev / created_by / updated_by` 并参与
+> optimistic concurrency；不重复引入 `lifecycle`（`ProjectStatus.archived` 已覆盖该语义）。
+
 ### rev 算法
 
 ```text
@@ -111,8 +114,12 @@ Task 状态语义：
   "slug": "efw",
   "description": "Embedded Framework",
   "status": "active",
+  "version": 1,
+  "rev": "sha256:…",
   "created_at": "2026-09-30T10:00:00+08:00",
   "updated_at": "2026-09-30T10:00:00+08:00",
+  "created_by": null,
+  "updated_by": null,
   "metadata": {}
 }
 ```
@@ -344,3 +351,34 @@ Event       entity_id → 任意对象
 ```
 
 引用完整性由 doctor 校验；悬空引用报告为 `BROKEN_LINK`。
+
+## 7. 领域校验规则（V0.1）
+
+领域校验统一在 ServiceContext 层执行，所有客户端（CLI / 未来 Web / SDK）行为一致。
+
+| 规则 | 行为 | 错误码 |
+|---|---|---|
+| 空 / 纯空白 title | 拒绝（project/goal/milestone/task/decision/link） | `INVALID_ARGUMENT` |
+| title > 500 字符 | 拒绝 | `INVALID_ARGUMENT` |
+| label 为空 / > 64 字符 | 拒绝 | `INVALID_ARGUMENT` |
+| handle 非法（`^[a-z0-9][a-z0-9._-]*$`）/ > 64 字符 | 拒绝 | `INVALID_ARGUMENT` |
+| 文本（description/body/…）> 200000 字符 | 拒绝 | `INVALID_ARGUMENT` |
+| 重复 label / owner | 去重，不报错 | — |
+| 重复 dependency / 重复 assign | 幂等 no-op，不产生事件 | — |
+| self dependency / self parent | 拒绝 | `INVALID_ARGUMENT` |
+| task dependency 环（depends_on） | 拒绝 | `DEPENDENCY_CYCLE` |
+| goal parent 环 / task parent 环 | 拒绝 | `HIERARCHY_CYCLE` |
+| decision supersede 环 / 自我取代 | 拒绝 | `HIERARCHY_CYCLE` / `INVALID_ARGUMENT` |
+| 新引用 deleted 对象 | 拒绝 | `INVALID_ARGUMENT` |
+| assign inactive / deleted member | 拒绝 | `INVALID_ARGUMENT` |
+| 新增任务到 closed/cancelled milestone | 拒绝 | `INVALID_ARGUMENT` |
+| 已属于 closed milestone 的任务同值保持 | 允许（no-op） | — |
+| 编辑 done task（标签/描述/优先级等） | 允许（保留 completed_at） | — |
+| done task 回到其它状态 | 允许（清空 completed_at） | — |
+| 软删除对象 | 允许，可 restore | — |
+
+说明：
+
+- 历史数据中已有的悬空引用 / 删除引用不做强制清除；doctor 以 warning 呈现。
+- `progress`、`computed_blocked` 不是可写字段，永远由真实 Task 状态推导。
+- Event 不可修改；纠正历史必须产生新事件。

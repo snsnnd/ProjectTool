@@ -53,9 +53,12 @@ def parse_time_spec(value: str | datetime | None) -> datetime | None:
 def format_time(value: datetime | str | None) -> str:
     if value is None:
         return ""
+    moment: datetime | None
     if isinstance(value, str):
         try:
-            value = datetime.fromisoformat(value)
+            moment = datetime.fromisoformat(value)
         except ValueError:
             return value
-    return value.strftime("%Y-%m-%d %H:%M")
+    else:
+        moment = value
+    return moment.strftime("%Y-%m-%d %H:%M")

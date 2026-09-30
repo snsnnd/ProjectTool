@@ -42,9 +42,9 @@ def test_project_tree(service, seeded):
 def test_parent_cycle_rejected(service):
     a = service.call("task.create", {"title": "A"})["id"]
     b = service.call("task.create", {"title": "B", "parent_task_id": a})["id"]
-    from project_tool.domain.errors import InvalidArgument
-
     import pytest
 
-    with pytest.raises(InvalidArgument):
+    from project_tool.domain.errors import HierarchyCycle
+
+    with pytest.raises(HierarchyCycle):
         service.call("task.set_parent", {"task_id": a, "parent_task_id": b})

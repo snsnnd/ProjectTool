@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from project_tool.domain.enums import DependencyRelation, Lifecycle, MilestoneStatus, TaskStatus
+from project_tool.domain.enums import DependencyRelation, Lifecycle, TaskStatus
+from project_tool.domain.goal import Goal
 from project_tool.domain.link import Link
 from project_tool.domain.milestone import Milestone
 from project_tool.domain.project import Project
-from project_tool.domain.goal import Goal
 from project_tool.domain.task import Task
 from project_tool.graph.dependency import is_computed_blocked
 
