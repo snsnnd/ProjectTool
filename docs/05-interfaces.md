@@ -130,8 +130,8 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
 | `graph.project` `graph.tasks` `graph.dependencies` `graph.links` | 项目图 | ✓ |
 | `search.query` | 全文/结构化搜索 | ○（V1-B） |
 | `artifact.*` | 产物引用 | ✓（V1-A，见下） |
-| `git.*` | Git 集成 | ○（V1） |
-| `sync.*` | 远程同步 | ○（V2） |
+| `git.*` | Git 集成 | ○（V1-B） |
+| `sync.*` | 远程同步 | ❌ **不做**（docs/06 §V2；`.pjt` 走 Git） |
 
 ## 4. 关键参数约定
 

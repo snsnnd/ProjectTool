@@ -26,11 +26,9 @@ Ports & Adapters / Clean Architecture。依赖方向永远向内：
         .pjt/
 ```
 
-未来扩展（V2）：
-
-```text
-Application Service → Remote Adapter → Project Server (FastAPI + PostgreSQL)
-```
+**没有这一层。** 决定不提供远程服务器（docs/06 §V2）：`.pjt` 跟 Git 走，
+多人协作 = 各自的 `.pjt` + Git pull / merge，冲突由 `rev` 链与 `doctor` 暴露。
+将来若要加本地 Web，也只是在本进程内多一个 HTTP 入口，仍然没有服务端存储。
 
 ## 2. 模块结构（V0.1 实际代码）
 

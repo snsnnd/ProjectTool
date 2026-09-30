@@ -30,19 +30,21 @@ my-project/
 
 | 属性 | 含义 |
 |---|---|
-| Local-first | 没有服务器也完整可用，`.pjt` 是唯一数据源 |
+| Local-first | 没有服务器也完整可用，`.pjt` 是唯一数据源（**永久性**，不是过渡状态） |
 | CLI-first | CLI 能完整操作的能力，Web 才有资格调用 |
 | Git-aware | 有 Git 自动增强，没有 Git 不影响使用 |
 | Composable | 多项目可通过 Project Link 组成项目树 |
+| Serverless | **没有服务器**，协作交给 Git（决定见 docs/06 §V2） |
 
-四种运行组合：
+两种运行组合（**只有这两种**）：
 
 ```text
-无服务器 + 无 Git   完整可用
-无服务器 + 有 Git   自动增强（V1）
-有服务器 + 无 Git   增加协作同步（V2）
-有服务器 + 有 Git   完整形态
+无 Git   完整可用，只是无法自动关联代码产物
+有 Git   完整形态：commit / 分支 / diff / 协作全部复用 Git
 ```
+
+**不做「有服务器」那一档**。`.pjt` 跟 Git 走，权限、冲突检测、历史全部由 Git 承担；
+自建同步服务器要重新实现其中一半还要自己运维。
 
 ## 3. 职责边界
 
@@ -52,7 +54,7 @@ Project Tool 负责：
 Goal / Milestone / Task / Member（项目内身份）
 Update / Decision / Artifact（V1）/ Project Link
 Event History / Dependency / Project Graph
-本地 Web UI（V1）/ 可选远程同步（V2）
+本地 Web UI（V1-B，尚未实现）。**不做远程同步**（docs/06 §V2）
 ```
 
 Project Tool 不负责：
@@ -72,19 +74,20 @@ KC           →  项目属于谁、谁可以参与、组织如何运行
 ```
 
 Project Tool 中的 `Member` 只回答“这个人在这个项目中是谁”（handle、role、git 身份映射），
-不是账号，不是权限实体。远程账号通过 mapping 绑定 Member（V2）。
+不是账号，不是权限实体。**没有账号体系，也没有权限模型**——`.pjt` 跟着 Git 走，
+访问控制交给 Git 托管（私有仓库）或文件系统权限。
 
 ## 5. 三种运行模式（同一套 Core）
 
 ```text
-Local 模式（V0）
-  CLI → Application Service → Domain Core → .pjt/
+CLI 模式（当前唯一）
+  CLI → Application Service → Domain Core → .pjt/ → Git
 
-Local Web 模式（V1）
+可选：本地 Web（V1-B，尚未实现）
   Browser → Local HTTP Server → 同一个 Service → 同一个 .pjt/
 
-Remote Collaboration 模式（V2）
-  Developer A/B → CLI/Web → 本地 .pjt → 同步 → Project Server
+不存在：Remote Collaboration
+  Developer A/B 之间的协作 = 各自的 .pjt + Git（pull / merge / 冲突由 rev 链暴露）
 ```
 
 三条铁律（任何时候不得破坏）：

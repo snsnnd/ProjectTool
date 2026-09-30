@@ -69,7 +69,7 @@ def doctor(
 
 
 def migrate(ctx: typer.Context) -> None:
-    """Run schema migrations (V0.1: validate only)."""
+    """Run schema migrations (create missing collections + bump project schema_version)."""
     execute(
         ctx,
         "project.migrate",

@@ -98,27 +98,44 @@ Decisions / Artifacts / Members / Linked Projects / Settings
 V1-A **刻意未做**（留到有真实需求时）：Artifact 内容快照（blob/CAS）、
 Area 唯一名约束、Task 多 Area、Search / 索引。
 
-### V2 — 远程协作
+### ~~V2 — 远程协作~~（❌ 已决定不做）
+
+**决定（2026-09-30）**：Project Tool **不提供远程服务器**。
+
+理由不是做不动，而是**协作已经有更好的载体**：
+
+- `.pjt/` 是可读 JSON、跟着 Git 走 → 历史 / 分支 / diff / blame / CI / review 全都白送；
+  自建服务器要重新实现其中一半，还要自己运维、自己备份、自己保证不丢数据。
+- 我们的并发模型（`rev` = 内容哈希 + `base_rev → new_rev` 事件链）比多数同步协议更严：
+  冲突会**显式报出来**（`REVISION_CONCEPT` 级别的 rev mismatch），不会静默 Last-Write-Wins。
+- 离线可用、零运维、零账号体系。个人 / 小团队自用场景下这是纯收益。
+
+放弃的便利（明确知道会缺，认了）：
+
+| 缺的 | 替代方案 |
+|---|---|
+| 跨机实时同步 | Git pull（可能需要人肉解 JSON merge） |
+| 细粒度 ACL | `.pjt` 进 Git，权限交给 Git 托管 / 仓库权限 |
+| Webhook（CI 响应任务完成） | CI 直接读 `.pjt/`，或将来写 `.github/workflows` 脚本 |
+| 跨项目检索 | 本地 grep / 未来的 `pjt search`（V1-B，纯本地） |
+
+**已知代价**：2 个并发写者 + Git merge 冲突时，目前没有 merge 辅助工具，
+`doctor` 会报 `PROJECT_CORRUPTED`（正确但需要人工解）。这是真实缺口，
+要用多人协作时才会遇到，届时应做 merge 辅助而不是做同步服务器。
+
+`errors.py` 里的 `SyncConflict` / `PermissionDenied` / `AuthRequired` /
+`RemoteUnavailable` / `BrokenLink` 保留为**占位错误码**，不实现对应功能。
+
+### ~~V3 — KC 集成~~（⏸ 视需要，不排期）
+
+KC 原本依赖 Project Server 提供 organization / project 映射、visibility、权限。
+既然**不做 remote**，KC 集成也随之搁置：没有账号与 ACL 体系可供对接。
+
+真要做，最小形态是 KC 直接读某个仓库的 `.pjt`（KC 侧拉取或用 Git 同步），
+而不是 KC → SDK → 我们的 Server。多一层我们自己维护的服务端没有收益。
 
 ```text
-Project Server（FastAPI + PostgreSQL：projects / project_objects / project_events /
-project_members / project_acl / sync_cursors / blobs / webhooks）
-Remote accounts 与 Member mapping
-owner / maintainer / contributor / viewer
-push / pull / conflicts（不做 Last-Write-Wins）
-Webhook（task.created / task.status_changed / milestone.closed /
-        decision.accepted / project.updated）
-@project-tool/sdk（TypeScript）
-```
-
-### V3 — KC 集成
-
-```text
-KC → Project SDK → Project Server
-KC 只保存 organization_project_id / project_tool_project_id / member mapping /
-visibility / 权限 / 展示元数据
-不复制 Task / Decision / Event；最多 read cache + Webhook 刷新
-KC Admin 使用 @project-tool/embed 组件（ProjectOverview / TaskBoard / Timeline / Graph）
+（搁置）
 ```
 
 ## 2. V0 验收标准（可执行）

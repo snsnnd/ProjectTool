@@ -39,7 +39,8 @@ Event 是 Project Tool 的不可变历史。本文件定义 V0.1 的 event 契�
    `pjt doctor` 的 `events.chain` 检查上述两条。
 8. `transaction_id` 指向 `.pjt/transactions/` 中对应的 manifest；一次事务内的事件
    共享同一 `transaction_id` 与 `occurred_at`。
-9. 事件排序：本地用 `occurred_at + ULID`；远程同步后由服务端附加 `server_seq`。
+9. 事件排序：`occurred_at + ULID`（ULID 字典序即创建顺序，够用）。
+   **没有 `server_seq`**——不做远程同步（docs/06 §V2），跨设备的顺序由 Git 拓扑决定。
 
 ## 3. Payload 契约
 
