@@ -1,0 +1,48 @@
+# 临时诊断用：按测试文件拆成独立 job，job 名字匿名可读，
+# 用来定位「只有 Windows 挂」到底是哪个文件。定位完就删掉。
+name: Diagnose
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  per-file:
+    name: win :: ${{ matrix.file }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+            "tests/test_area.py",
+            "tests/test_artifact.py",
+            "tests/test_cli.py",
+            "tests/test_cli_completeness.py",
+            "tests/test_conflict.py",
+            "tests/test_dependency.py",
+            "tests/test_doctor.py",
+            "tests/test_events.py",
+            "tests/test_expected_rev.py",
+            "tests/test_gap_fixes.py",
+            "tests/test_git.py",
+            "tests/test_graph.py",
+            "tests/test_hardening.py",
+            "tests/test_hashing.py",
+            "tests/test_ids.py",
+            "tests/test_locking.py",
+            "tests/test_project_revision.py",
+            "tests/test_registry.py",
+            "tests/test_service_flow.py",
+            "tests/test_storage.py",
+            "tests/test_task_ready_cli.py",
+            "tests/test_transaction_recovery.py",
+            "tests/test_validation.py",
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Run
+        run: uv run pytest -rf --tb=line -p no:cacheprovider ${{ matrix.file }}
