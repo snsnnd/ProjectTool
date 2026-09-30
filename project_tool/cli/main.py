@@ -47,8 +47,10 @@ from project_tool.domain.errors import ProjectToolError
 app = typer.Typer(
     name="pjt",
     help="Local-first, Git-aware project state and collaboration system.",
-    no_args_is_help=True,
     add_completion=False,
+    # invoke_without_command 让 `pjt --version` / `pjt --help` 不被「缺少子命令」挡掉；
+    # 无子命令时在 callback 里手动打印 help（与 no_args_is_help 等价但 exit code 稳定为 0）。
+    invoke_without_command=True,
 )
 
 
@@ -67,6 +69,9 @@ def main_callback(
         console.print(f"project-tool {__version__}")
         raise typer.Exit()
     ctx.obj = CliState(json_out=json_out, porcelain=porcelain, actor=as_member, project=project)
+    if ctx.invoked_subcommand is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
 
 
 app.command()(project_module.init)

@@ -56,7 +56,8 @@ def area_show(
 @area_app.command("tree")
 def area_tree(ctx: typer.Context) -> None:
     """Show the area hierarchy as a tree."""
-    rows = execute(ctx, "area.list", {"include_archived": True})
+    # 只取数据：render 传 no-op，避免把中间结果再 echo 一遍 JSON。
+    rows = execute(ctx, "area.list", {"include_archived": True}, render=lambda _rows: None)
     if not rows:
         console.print("[dim]no areas[/dim]")
         return

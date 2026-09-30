@@ -204,3 +204,17 @@ def test_cli_milestone_show_exposes_rev(tmp_path):
     view = json.loads(result.output)["result"]
     assert view["rev"] == milestone["rev"]
     assert view["version"] == 1
+
+
+def test_cli_version_and_bare_invocation():
+    result = invoke(["--version"])
+    assert result.exit_code == 0
+    assert "project-tool" in result.output
+
+    # 无子命令 -> 打印 help，exit 0（与 docs/05 的 --version 承诺一致）
+    result = invoke([])
+    assert result.exit_code == 0
+    assert "Usage" in result.output
+
+    # 未知选项仍然是 usage error (exit 2)
+    assert invoke(["--definitely-not-an-option"]).exit_code == 2
