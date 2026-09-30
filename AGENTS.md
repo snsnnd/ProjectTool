@@ -99,6 +99,7 @@ domain 模型/校验 → application/services/<域>.py → registry.py 注册
 ## 6. 验证习惯
 
 - 任何改动：`ruff check .` + `mypy project_tool` + `pytest` 全绿再提交。
+- 看 CI（Ubuntu + Windows）：`./dogfooding/scripts/ci_status.sh`，公开仓库匿名 API，不需要 gh / token。
 - 测试只用 `tmp_path` + monkeypatch，禁止 sleep/网络/随机依赖；失败注入参考
   `tests/test_transaction_recovery.py`。
 - 公共行为变化必须同步 `docs/05`（接口）、`docs/03`（模型/校验）、`docs/08`（事件 payload）。
