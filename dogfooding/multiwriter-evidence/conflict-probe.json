@@ -1,0 +1,134 @@
+{
+  "as_is": [
+    {
+      "scenario": "S0 both idle (control)",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S1 both create a different task",
+      "clean": false,
+      "conflicts": [
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S2 both post an update",
+      "clean": false,
+      "conflicts": [
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S3 both add a label",
+      "clean": false,
+      "conflicts": [
+        ".pjt/refs/labels.json",
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S4 both edit a different task",
+      "clean": false,
+      "conflicts": [
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S5 both edit the SAME task object",
+      "clean": false,
+      "conflicts": [
+        ".pjt/objects/tasks/TSK-01M3SVB74MP8CGJWZB5F9HB31X.json",
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S6 A creates task / B posts update",
+      "clean": false,
+      "conflicts": [
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S7 both create a task in the same area",
+      "clean": false,
+      "conflicts": [
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    },
+    {
+      "scenario": "S8 both add a member",
+      "clean": false,
+      "conflicts": [
+        ".pjt/state/state.json"
+      ],
+      "ignore_derived": false
+    }
+  ],
+  "derived_ignored": [
+    {
+      "scenario": "S0 both idle (control)",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S1 both create a different task",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S2 both post an update",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S3 both add a label",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S4 both edit a different task",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S5 both edit the SAME task object",
+      "clean": false,
+      "conflicts": [
+        ".pjt/objects/tasks/TSK-01M3SVHD13CRENH3RG293G3AWX.json"
+      ],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S6 A creates task / B posts update",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S7 both create a task in the same area",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    },
+    {
+      "scenario": "S8 both add a member",
+      "clean": true,
+      "conflicts": [],
+      "ignore_derived": true
+    }
+  ]
+}
