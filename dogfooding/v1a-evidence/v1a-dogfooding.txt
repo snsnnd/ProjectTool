@@ -1,6 +1,6 @@
-workdir: /tmp/pjt-v1a-efw-mdhpqcnd
+workdir: /tmp/pjt-v1a-efw-_uyjyvcd
 efw:     /mnt/d/framework/new/efw
-copy:    /tmp/pjt-v1a-efw-mdhpqcnd/efw
+copy:    /tmp/pjt-v1a-efw-_uyjyvcd/efw
 ===== 1. REAL EFW: read-only regression + schema 1.0 -> 1.1 =====
 
 --- pjt --version ---
@@ -145,15 +145,15 @@ no areas
 ===== 2. TEMP COPY: Area dimension (vs real EFW data) =====
 
 --- 2.1 5 个顶层 Area（EFW 的真实模块边界） ---
-created ARA-01M3SMRQT9DVX5X46KTGA1Y0CG  Core
-created ARA-01M3SMRQVATK5M0GA9AVWD0XMK  UI
-created ARA-01M3SMRQWBZW3T12PEPPS0CVX6  Debug
-created ARA-01M3SMRQXDAA2HYVF169XYKM1S  Runtime
-created ARA-01M3SMRQYE8DNRXMPWSRHZW8DV  Distribution
+created ARA-01M3SPXH8ZYACN0DKRGK8K0TX8  Core
+created ARA-01M3SPXHAAR8RPDDY4CJSBK5MX  UI
+created ARA-01M3SPXHBHC3R6XV63A5DEKCNY  Debug
+created ARA-01M3SPXHCPT2N636AG9GHDEZTK  Runtime
+created ARA-01M3SPXHDWMD82NT23PH1K4BQ1  Distribution
 
 --- 2.2 二级 Area（UI 下面的稳定子分区） ---
-created ARA-01M3SMRQZZE3490SKHXRG8NB8H  Editor  parent=ARA-01M3SMRQVATK5M0GA9AVWD0XMK
-created ARA-01M3SMRR12TAZB460MS05WBCAC  Debug UI  parent=ARA-01M3SMRQVATK5M0GA9AVWD0XMK
+created ARA-01M3SPXHFM8K5C22GX53S0WV0F  Editor  parent=ARA-01M3SPXHAAR8RPDDY4CJSBK5MX
+created ARA-01M3SPXHGWPJK65D3C3V5Z72V1  Debug UI  parent=ARA-01M3SPXHAAR8RPDDY4CJSBK5MX
 
 --- 2.3 把 14 个真实 EFW 任务映射到 Area（Task 单 Area，取主 Area） ---
   store.updateModel                  -> Core         (TSK-01M3R9M619FW024TG9M9RBMYRJ)
@@ -218,23 +218,23 @@ created ARA-01M3SMRR12TAZB460MS05WBCAC  Debug UI  parent=ARA-01M3SMRQVATK5M0GA9A
 ===== 3. TEMP COPY: Artifact references =====
 
 --- 3.1 file artifact（只对已确认存在的路径建引用） ---
-  file         studio_core/service.py                                     ART-01M3SMRS2NS82G8EB86X2RAZ0K
-  file         studio_core/cli.py                                         ART-01M3SMRS3YM73TXWWY71PCDME8
-  file         studio_core/server.py                                      ART-01M3SMRS58JW283SWVNF2V3PVR
-  file         studio_core/debug.py                                       ART-01M3SMRS6K7HZ1DAX7YK3J5WRR
-  file         package.json                                               ART-01M3SMRS7VA3WMW6E31W49TENM
-  file         ui/store.tsx                                               ART-01M3SMRS91MRZR187G3SSBB2F8
-  document     docs/04-debug-and-api.md                                   ART-01M3SMRSA6PX59ABS88BA29TWE
-  url          https://www.electronjs.org/docs/latest/tutorial/quick-star ART-01M3SMRSBAKG6K206TS4PE7FZP
-  git_branch   tmp/new                                                    ART-01M3SMRSCD385F84NQRS7XNC7N
-  git_commit   2cb4a74                                                    ART-01M3SMRSDHJZR2Y46C5Q0FENPK
+  file         studio_core/service.py                                     ART-01M3SPXJP5YM76PEG0KDCNQHSK
+  file         studio_core/cli.py                                         ART-01M3SPXJQBS0H6FFK9PVG2NF8C
+  file         studio_core/server.py                                      ART-01M3SPXJREM48FN6Z354HKQ5N9
+  file         studio_core/debug.py                                       ART-01M3SPXJSHHTH1QBX1EHXME8K7
+  file         package.json                                               ART-01M3SPXJTP9TMWDTH05NTKCMKG
+  file         ui/store.tsx                                               ART-01M3SPXJVRXTBYEAH7QAXNGJ9C
+  document     docs/04-debug-and-api.md                                   ART-01M3SPXJWS9WXR26YR8EH208XJ
+  url          https://www.electronjs.org/docs/latest/tutorial/quick-star ART-01M3SPXJXSB3HAMTNANKDSTJ2Z
+  git_branch   tmp/new                                                    ART-01M3SPXJYWCJWX5V0TBE25DFGH
+  git_commit   2cb4a74                                                    ART-01M3SPXJZXSWWDRFF92B6EPCPF
 
 --- 3.2 path boundary：ProjectTool 自己的 report 在另一个仓库里 ---
   dogfooding/report.md 位于 ProjectTool 仓库，不在 EFW project root：
     as file artifact (locator 合法但文件不存在)                  -> created, verify=missing (exists=False) => 只是 warning，不是数据损坏
     as file artifact 逃出 root                             -> INVALID_ARGUMENT: file artifact locator must be a clean relative path (no empty, '.' or '..' segments): '../../ProjectTool/dogfooding/report.md'
   正确做法（外部文档用 url 引用）：
-    url  ART  ART-01M3SMRSH797C60TNMQFGE1F4J  https://github.com/snsnnd/ProjectTool/blob/main/dogfooding/report.md
+    url  ART  ART-01M3SPXK3ZVGFYVSKE8ZK9JKPX  https://github.com/snsnnd/ProjectTool/blob/main/dogfooding/report.md
 
 --- 3.3 危险 locator 全部拒绝 ---
   file        ../../secret.txt                   -> INVALID_ARGUMENT
@@ -283,28 +283,28 @@ created ARA-01M3SMRR12TAZB460MS05WBCAC  Debug UI  parent=ARA-01M3SMRQVATK5M0GA9A
   ok       url         https://github.com/snsnnd/ProjectTool/blob/main/dogfoodi url format ok; no network request is made (V1-A)
 
 --- 3.7 缺失文件 = warning 而不是 PROJECT_CORRUPTED ---
-  created ART-01M3SMRWBA7FSTM90CCB43S6Z5 locator=scripts/never_created.py (scripts/ 目前为空)
+  created ART-01M3SPXKXGVHPHZF4CM3GWDFEK locator=scripts/never_created.py (scripts/ 目前为空)
   verify -> missing exists=False
   doctor artifacts.locators -> warning: 2 artifact file(s) not found under the project root (of 13 verifiable locator(s))
-      ART-01M3SMRSFJAK4EB8M57NJN1Z7Y: no such file in project root: dogfooding/report.md
-      ART-01M3SMRWBA7FSTM90CCB43S6Z5: no such file in project root: scripts/never_created.py
+      ART-01M3SPXK24Z1EJNS73X4N7PPDC: no such file in project root: dogfooding/report.md
+      ART-01M3SPXKXGVHPHZF4CM3GWDFEK: no such file in project root: scripts/never_created.py
   doctor ok = True  (file 缺失不判 corrupted)
 
 --- 3.8 verify 是纯查询：不产生事件 ---
   events before=78 after=78 (must be equal)
 
 --- 3.9 Artifact 事件契约 ---
-  2026-10-01T01:11:08  artifact.created     {'kind': 'file', 'locator': 'scripts/never_created.py', 'name': 'planned packaging script (not written yet)'}
-  2026-10-01T01:11:07  artifact.attached    {'relations': [{'attached': True, 'id': 'MLS-01M3R9JJ1C2BYZS49SJQTJ1SQ7', 'relation': 'milestone'}]}
-  2026-10-01T01:11:07  artifact.attached    {'relations': [{'attached': True, 'id': 'DEC-01M3R9XTDY3SE9ZGTQG2X6TXF0', 'relation': 'decision'}]}
-  2026-10-01T01:11:07  artifact.attached    {'relations': [{'attached': True, 'id': 'DEC-01M3R9XTDY3SE9ZGTQG2X6TXF0', 'relation': 'decision'}]}
-  2026-10-01T01:11:05  artifact.attached    {'relations': [{'attached': True, 'id': 'TSK-01M3R9PKPF60MAMEGDQH4Z7642', 'relation': 'task'}]}
-  2026-10-01T01:11:05  artifact.attached    {'relations': [{'attached': True, 'id': 'TSK-01M3R9M619FW024TG9M9RBMYRJ', 'relation': 'task'}]}
+  2026-10-01T01:48:40  artifact.created     {'kind': 'file', 'locator': 'scripts/never_created.py', 'name': 'planned packaging script (not written yet)'}
+  2026-10-01T01:48:40  artifact.attached    {'relations': [{'attached': True, 'id': 'MLS-01M3R9JJ1C2BYZS49SJQTJ1SQ7', 'relation': 'milestone'}]}
+  2026-10-01T01:48:40  artifact.attached    {'relations': [{'attached': True, 'id': 'DEC-01M3R9XTDY3SE9ZGTQG2X6TXF0', 'relation': 'decision'}]}
+  2026-10-01T01:48:40  artifact.attached    {'relations': [{'attached': True, 'id': 'DEC-01M3R9XTDY3SE9ZGTQG2X6TXF0', 'relation': 'decision'}]}
+  2026-10-01T01:48:40  artifact.attached    {'relations': [{'attached': True, 'id': 'TSK-01M3R9PKPF60MAMEGDQH4Z7642', 'relation': 'task'}]}
+  2026-10-01T01:48:40  artifact.attached    {'relations': [{'attached': True, 'id': 'TSK-01M3R9M619FW024TG9M9RBMYRJ', 'relation': 'task'}]}
 
 --- 3.10 remove 只删引用，绝不动被引用文件 ---
-  before: /tmp/pjt-v1a-efw-mdhpqcnd/efw/studio_core/debug.py  sha256=75509c36396a69ca  size=15806
+  before: /tmp/pjt-v1a-efw-_uyjyvcd/efw/studio_core/debug.py  sha256=75509c36396a69ca  size=15806
   artifact.remove -> lifecycle=deleted
-  after : /tmp/pjt-v1a-efw-mdhpqcnd/efw/studio_core/debug.py  sha256=75509c36396a69ca  size=15806
+  after : /tmp/pjt-v1a-efw-_uyjyvcd/efw/studio_core/debug.py  sha256=75509c36396a69ca  size=15806
   file untouched: True
 
 --- 3.11 expected_rev 合同（过期 rev -> REVISION_CONFLICT） ---
@@ -319,37 +319,37 @@ created ARA-01M3SMRR12TAZB460MS05WBCAC  Debug UI  parent=ARA-01M3SMRQVATK5M0GA9A
   files compared: 161
 
 ===== 4. CLI surface (real commands, not just the Service API) =====
-  (task TSK-01M3R9Q5, artifact ART-01M3SMRS, short id ART-01M3SMRS7)
+  (task TSK-01M3R9Q5, artifact ART-01M3SPXJ, short id ART-01M3SPXJT)
 
   $ pjt area list   [exit=0]
-      ARA-01M3SMRQ  Core             3 task(s)
-      ARA-01M3SMRQ  UI               4 task(s)
-      ARA-01M3SMRQ  Debug            2 task(s)
-      ARA-01M3SMRQ  Runtime          1 task(s)
-      ARA-01M3SMRQ  Distribution     4 task(s)
-      ARA-01M3SMRQ  Editor           0 task(s)  parent ARA-01M3SMRQ
-      ARA-01M3SMRR  Debug UI         0 task(s)  parent ARA-01M3SMRQ
+      ARA-01M3SPXH  Core             3 task(s)
+      ARA-01M3SPXH  UI               4 task(s)
+      ARA-01M3SPXH  Debug            2 task(s)
+      ARA-01M3SPXH  Runtime          1 task(s)
+      ARA-01M3SPXH  Distribution     4 task(s)
+      ARA-01M3SPXH  Editor           0 task(s)  parent ARA-01M3SPXH
+      ARA-01M3SPXH  Debug UI         0 task(s)  parent ARA-01M3SPXH
 
   $ pjt area show Debug   [exit=0]
-      ARA-01M3SMRQWBZW3T12PEPPS0CVX6  Debug  (active)
+      ARA-01M3SPXHBHC3R6XV63A5DEKCNY  Debug  (active)
         tasks     2
       
         transport, real-device debug, observe_port templates
       
         list tasks with: pjt task list --area Debug
       
-        rev sha256:4a284feb38f5095a7955817de6c3d5267c898019391c6a5536b6623f674886fc  
+        rev sha256:59e85e60e033d90e863a888bbcd86c2ab46b4cfa6bc5798b5e1df33460969f07  
       v1
 
   $ pjt area tree   [exit=0]
       Areas
-      ├── ARA-01M3SMRQ  Core  3 task(s)
-      ├── ARA-01M3SMRQ  Debug  2 task(s)
-      ├── ARA-01M3SMRQ  Distribution  4 task(s)
-      ├── ARA-01M3SMRQ  Runtime  1 task(s)
-      └── ARA-01M3SMRQ  UI  4 task(s)
-          ├── ARA-01M3SMRR  Debug UI  0 task(s)
-          └── ARA-01M3SMRQ  Editor  0 task(s)
+      ├── ARA-01M3SPXH  Core  3 task(s)
+      ├── ARA-01M3SPXH  Debug  2 task(s)
+      ├── ARA-01M3SPXH  Distribution  4 task(s)
+      ├── ARA-01M3SPXH  Runtime  1 task(s)
+      └── ARA-01M3SPXH  UI  4 task(s)
+          ├── ARA-01M3SPXH  Debug UI  0 task(s)
+          └── ARA-01M3SPXH  Editor  0 task(s)
 
   $ pjt task list --area Debug   [exit=0]
       ID             Status    Priority  Title                                        
@@ -361,53 +361,53 @@ created ARA-01M3SMRR12TAZB460MS05WBCAC  Debug UI  parent=ARA-01M3SMRQVATK5M0GA9A
       TSK-01M3R9Q5DF6W94W4T5W7WSEQT2  重建 desktop 主进程与 preload 白名单桥
         status=inbox  priority=high  weight=5  lifecycle=active
         milestone  MLS-01M3R9K8
-        area       ARA-01M3SMRQ
+        area       ARA-01M3SPXH
         owners     MBR-01M3R9H2
         labels     desktop
       
-        rev sha256:d994e6b69eb7559fb17c4063419950cfb26fc3cd946556277773abdab6fd9b29  
+        rev sha256:340b079187316a72063a39f2c3ded9f39516c8661e8793643ac7c7e12a0a95ae  
       v2
 
   $ pjt task artifacts TSK-01M3R9Q5DF6W94W4T5W7WSEQT2   [exit=0]
-      ART-01M3SMRS  file         package.json  task:TSK-01M3R9Q5
+      ART-01M3SPXJ  file         package.json  task:TSK-01M3R9Q5
 
   $ pjt task related-updates TSK-01M3R9Q5DF6W94W4T5W7WSEQT2   [exit=0]
       UPD-01M3R9X4  2026-09-30 12:41  确认 desktop/ 与 scripts/ 
       为空，打包链路未闭合；先重建主进程桥。
 
   $ pjt artifact list --task TSK-01M3R9Q5DF6W94W4T5W7WSEQT2   [exit=0]
-      ART-01M3SMRS  file         package.json  task:TSK-01M3R9Q5
+      ART-01M3SPXJ  file         package.json  task:TSK-01M3R9Q5
 
-  $ pjt artifact show ART-01M3SMRS7   [exit=0]
-      ART-01M3SMRS7VA3WMW6E31W49TENM  Electron build manifest  (active)
+  $ pjt artifact show ART-01M3SPXJT   [exit=0]
+      ART-01M3SPXJTP9TMWDTH05NTKCMKG  Electron build manifest  (active)
         kind      file
         locator   package.json
       
         Tasks
           TSK-01M3R9Q5
       
-        rev sha256:405521551cb55db64be4a3bd75a499ac729e78a51f025b631f7d4fbc1e0502cc  
+        rev sha256:6596739bd9ba24216cc6c6d05b8a5bda77caf86585bf92472c8d487bad1a4c70  
       v2
 
   $ pjt artifact verify   [exit=0]
-         ART-01M3SMRS  file         studio_core/service.py
-         ART-01M3SMRS  file         studio_core/cli.py
-         ART-01M3SMRS  file         studio_core/server.py
-         ART-01M3SMRS  file         package.json
-         ART-01M3SMRS  file         ui/store.tsx
-         ART-01M3SMRS  document     docs/04-debug-and-api.md
+         ART-01M3SPXJ  file         studio_core/service.py
+         ART-01M3SPXJ  file         studio_core/cli.py
+         ART-01M3SPXJ  file         studio_core/server.py
+         ART-01M3SPXJ  file         package.json
+         ART-01M3SPXJ  file         ui/store.tsx
+         ART-01M3SPXJ  document     docs/04-debug-and-api.md
                  document locators are opaque references in V1-A; nothing to verify
-         ART-01M3SMRS  url          
+         ART-01M3SPXJ  url          
       https://www.electronjs.org/docs/latest/tutorial/quick-start
                  url format ok; no network request is made (V1-A)
-         ART-01M3SMRS  git_branch   tmp/new
+         ART-01M3SPXJ  git_branch   tmp/new
                  git unavailable; locator kept as an unverified reference
-         ART-01M3SMRS  git_commit   2cb4a74
+         ART-01M3SPXJ  git_commit   2cb4a74
                  git unavailable; locator kept as an unverified reference
 
-  $ pjt artifact history ART-01M3SMRS7   [exit=0]
-      2026-10-01 01:11  ART-01M3SMRS artifact.created  Electron build manifest
-      2026-10-01 01:11  ART-01M3SMRS artifact.attached
+  $ pjt artifact history ART-01M3SPXJT   [exit=0]
+      2026-10-01 01:48  ART-01M3SPXJ artifact.created  Electron build manifest
+      2026-10-01 01:48  ART-01M3SPXJ artifact.attached
 
   $ pjt graph project   [exit=0]
       EFW Studio (PRJ-01M3R9F6DT0JFPXH0M417888MC)
@@ -417,13 +417,13 @@ created ARA-01M3SMRR12TAZB460MS05WBCAC  Debug UI  parent=ARA-01M3SMRQVATK5M0GA9A
       │   ├── Milestone: 桌面壳与打包 0%
       │   └── Milestone: 工程卫生 0%
       └── Areas (stable partitions)
-          ├── ARA-01M3SMRQ  Core 3 task(s)
-          ├── ARA-01M3SMRQ  Debug 2 task(s)
-          ├── ARA-01M3SMRQ  Distribution 4 task(s)
-          ├── ARA-01M3SMRQ  Runtime 1 task(s)
-          └── ARA-01M3SMRQ  UI 4 task(s)
-              ├── ARA-01M3SMRR  Debug UI 0 task(s)
-              └── ARA-01M3SMRQ  Editor 0 task(s)
+          ├── ARA-01M3SPXH  Core 3 task(s)
+          ├── ARA-01M3SPXH  Debug 2 task(s)
+          ├── ARA-01M3SPXH  Distribution 4 task(s)
+          ├── ARA-01M3SPXH  Runtime 1 task(s)
+          └── ARA-01M3SPXH  UI 4 task(s)
+              ├── ARA-01M3SPXH  Debug UI 0 task(s)
+              └── ARA-01M3SPXH  Editor 0 task(s)
 
 --- 4.1 CLI 拒绝危险 locator ---
   pjt artifact add file ../../secret.txt         -> exit=3 INVALID_ARGUMENT
@@ -457,9 +457,9 @@ schema 1.1, rev ok
   OK      references           all references valid
   WARNING artifacts.locators   2 artifact file(s) not found under the project 
 root (of 13 verifiable locator(s))
-          ART-01M3SMRSFJAK4EB8M57NJN1Z7Y: no such file in project root: 
+          ART-01M3SPXK24Z1EJNS73X4N7PPDC: no such file in project root: 
 dogfooding/report.md
-          ART-01M3SMRWBA7FSTM90CCB43S6Z5: no such file in project root: 
+          ART-01M3SPXKXGVHPHZF4CM3GWDFEK: no such file in project root: 
 scripts/never_created.py
   OK      dependencies         15 task(s), no cycles
   OK      hierarchy            goal/area/task/decision hierarchies acyclic
@@ -489,4 +489,4 @@ OK  objects=48 events=82 errors=0 warnings=1 repairable=0
   events 总数       : 82
   doctor            : ok=True errors=0 warnings=1 repairable=0
 
-done. workdir kept for inspection: /tmp/pjt-v1a-efw-mdhpqcnd
+done. workdir kept for inspection: /tmp/pjt-v1a-efw-_uyjyvcd

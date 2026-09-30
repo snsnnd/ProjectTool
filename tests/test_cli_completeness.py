@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tomllib
 import unicodedata
 from pathlib import Path
 
@@ -447,6 +448,23 @@ def test_link_map_local_path_resolves_the_link(root, tmp_path):
     assert payload["local_mapped"] is True
 
 
+def _local_link_paths(root) -> dict:
+    """解析 local.toml 的 [links.*] path。
+
+    不要用 `str(path) in text` 判断：save_local 写的是 json.dumps(path)，
+    Windows 上反斜杠会被翻倍（"C:\\x" -> "C:\\\\x"），字面匹配在
+    Windows 上永远不成立。必须解析后比较。
+    """
+    pjt = root / ".pjt" / "local" / "local.toml"
+    data = tomllib.loads(pjt.read_text(encoding="utf-8"))
+    return {name: cfg.get("path") for name, cfg in (data.get("links") or {}).items()}
+
+
+def _path_needles(path) -> list:
+    """路径的原始形态 + JSON 转义后的形态（Windows 专用）。"""
+    return [str(path), json.dumps(str(path))[1:-1]]
+
+
 def test_link_map_local_path_never_leaks_into_shared_state(root, tmp_path):
     """§7：绝对路径只进 local.toml。objects / events / project.json 一律不许出现。"""
     sibling = tmp_path / "sib"
@@ -454,13 +472,19 @@ def test_link_map_local_path_never_leaks_into_shared_state(root, tmp_path):
     jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
     jinvoke(["-C", str(root), "link", "map-local", "sib", str(sibling)])
 
+    assert _local_link_paths(root)["sib"] == str(sibling)
+
+    needles = _path_needles(sibling)
     pjt = root / ".pjt"
-    assert str(sibling) in (pjt / "local" / "local.toml").read_text(encoding="utf-8")
     for shared in (pjt / "objects", pjt / "events"):
         for path in shared.rglob("*"):
             if path.is_file():
-                assert str(sibling) not in path.read_text(encoding="utf-8"), path
-    assert str(sibling) not in (pjt / "project.json").read_text(encoding="utf-8")
+                text = path.read_text(encoding="utf-8", errors="replace")
+                for needle in needles:
+                    assert needle not in text, path
+    project_json = (pjt / "project.json").read_text(encoding="utf-8")
+    for needle in needles:
+        assert needle not in project_json
 
 
 def test_link_map_local_path_emits_no_event(root, tmp_path):
@@ -559,9 +583,11 @@ def test_map_local_writes_a_git_ignorable_file(tmp_path):
     jinvoke(["-C", str(repo), "link", "add", "sib", "sibling", "--kind", "local_project"])
     jinvoke(["-C", str(repo), "link", "map-local", "sib", str(sibling)])
 
+    assert _local_link_paths(repo)["sib"] == str(sibling)
     tracked = subprocess.run(
         ["git", "-C", str(repo), "status", "--porcelain"],
         capture_output=True,
         text=True,
     ).stdout
-    assert str(sibling) not in tracked
+    for needle in _path_needles(sibling):
+        assert needle not in tracked
