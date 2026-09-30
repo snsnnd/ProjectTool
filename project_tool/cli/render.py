@@ -310,6 +310,23 @@ def render_git_available(result: dict[str, Any]) -> None:
         console.print(f"  layout    : project root is [bold]{subdir or '(unknown)'}[/bold] under git root")
 
 
+def render_link_map(result: dict[str, Any]) -> None:
+    console.print(f"[green]mapped[/green] {result['name']}  ->  {result['path']}")
+    if not result.get("has_project"):
+        console.print(
+            f"  [yellow]note[/yellow] {result['note']}\n"
+            f"        [dim]{result['probe']}[/dim]"
+        )
+    console.print("  [dim]stored in .pjt/local/local.toml (not committed)[/dim]")
+
+
+def render_link_unmap(result: dict[str, Any]) -> None:
+    if result.get("unmapped"):
+        console.print(f"[green]unmapped[/green] {result['name']}  [dim]{result['path']}[/dim]")
+    else:
+        console.print(f"{result['name']} had no local path mapping")
+
+
 def render_link_status(result: dict[str, Any]) -> None:
     """`pjt link status` —— 字段与 link.resolve 一致（V1-B.1：resolved 不许说谎）。
 
@@ -322,6 +339,8 @@ def render_link_status(result: dict[str, Any]) -> None:
         f"[bold]{result.get('name', '')}[/bold]  {result.get('kind', '')}  {mark}"
         f"  [dim]{result.get('locator') or result.get('project_id') or ''}[/dim]"
     )
+    if result.get("local_mapped"):
+        console.print(f"  [dim]machine path from .pjt/local/local.toml: {result['local_path']}[/dim]")
     if resolved:
         peer = result.get("project") or {}
         console.print(f"  peer   : {peer.get('name', '')}  [dim]{peer.get('id', '')}[/dim]")

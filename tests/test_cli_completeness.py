@@ -399,3 +399,167 @@ def test_status_does_not_dump_every_area(root):
 def test_ellipsis_helper_is_importable_from_render():
     assert callable(ellipsis)
     assert unicodedata.east_asian_width("中") == "W"
+
+
+# ------------------------------------------- link 的机器本地路径（V1-B.2 补完的半截功能）
+
+
+def _absolute_locator_link_error(root) -> str:
+    bad = invoke(["-C", str(root), "link", "add", "sib", "/abs/elsewhere", "--kind", "local_project"])
+    assert bad.exit_code != 0
+    assert "INVALID_ARGUMENT" in bad.output
+    return bad.output
+
+
+def test_link_add_absolute_locator_error_names_both_ways_out(root):
+    """原来只说「去 local.toml 映射」，但当时根本没有 CLI 能映射——误导。"""
+    output = _absolute_locator_link_error(root)
+    assert "relative" in output
+    assert "map-local" in output
+
+
+def test_link_add_rejects_absolute_locator(root, tmp_path):
+    sibling = tmp_path / "sib"
+    init_project(sibling, name="Sib")
+    bad = invoke(
+        ["-C", str(root), "link", "add", "sib", str(sibling), "--kind", "local_project"]
+    )
+    assert bad.exit_code != 0
+    # 拒绝之后不能留下半个 link
+    assert json.loads(jinvoke(["-C", str(root), "link", "list"]).output)["result"] == []
+
+
+def test_link_map_local_path_resolves_the_link(root, tmp_path):
+    sibling = tmp_path / "sib"
+    init_project(sibling, name="Mapped")
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+
+    mapped = jinvoke(["-C", str(root), "link", "map-local", "sib", str(sibling)])
+    assert mapped.exit_code == 0, mapped.output
+    assert json.loads(mapped.output)["result"]["has_project"] is True
+
+    status = jinvoke(["-C", str(root), "link", "status", "sib"])
+    payload = json.loads(status.output)["result"]
+    assert payload["resolved"] is True
+    assert payload["project"]["name"] == "Mapped"
+    assert payload["local_mapped"] is True
+
+
+def test_link_map_local_path_never_leaks_into_shared_state(root, tmp_path):
+    """§7：绝对路径只进 local.toml。objects / events / project.json 一律不许出现。"""
+    sibling = tmp_path / "sib"
+    init_project(sibling, name="Secret")
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    jinvoke(["-C", str(root), "link", "map-local", "sib", str(sibling)])
+
+    pjt = root / ".pjt"
+    assert str(sibling) in (pjt / "local" / "local.toml").read_text(encoding="utf-8")
+    for shared in (pjt / "objects", pjt / "events"):
+        for path in shared.rglob("*"):
+            if path.is_file():
+                assert str(sibling) not in path.read_text(encoding="utf-8"), path
+    assert str(sibling) not in (pjt / "project.json").read_text(encoding="utf-8")
+
+
+def test_link_map_local_path_emits_no_event(root, tmp_path):
+    """写事件等于把绝对路径抄进共享历史，等于绕过 §7。"""
+    sibling = tmp_path / "sib"
+    init_project(sibling, name="Sib")
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    before = json.loads(jinvoke(["-C", str(root), "log"]).output)["result"]["count"]
+    jinvoke(["-C", str(root), "link", "map-local", "sib", str(sibling)])
+    after = json.loads(jinvoke(["-C", str(root), "log"]).output)["result"]["count"]
+    assert after == before
+
+
+def test_link_map_local_path_requires_an_absolute_path(root):
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    bad = jinvoke(["-C", str(root), "link", "map-local", "sib", "relative/path"])
+    assert bad.exit_code != 0
+    assert "INVALID_ARGUMENT" in bad.output
+
+
+def test_link_map_local_path_rejects_empty(root):
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    bad = jinvoke(["-C", str(root), "link", "map-local", "sib", " "])
+    assert bad.exit_code != 0
+    assert "INVALID_ARGUMENT" in bad.output
+
+
+def test_link_map_local_path_needs_an_existing_link(root, tmp_path):
+    bad = jinvoke(
+        ["-C", str(root), "link", "map-local", "nope", str(tmp_path / "wherever")]
+    )
+    assert bad.exit_code != 0
+    assert "INVALID_ARGUMENT" in bad.output
+
+
+def test_link_map_local_path_does_not_claim_success_without_a_project(root, tmp_path):
+    """路径存在但不是 .pjt 项目：如实说 note，交给 link.status 判定（§12）。"""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    mapped = jinvoke(["-C", str(root), "link", "map-local", "sib", str(empty)])
+    assert json.loads(mapped.output)["result"]["has_project"] is False
+
+    status = jinvoke(["-C", str(root), "link", "status", "sib"])
+    assert json.loads(status.output)["result"]["resolved"] is False
+
+
+def test_link_unmap_local_path_falls_back_to_the_object_locator(root, tmp_path):
+    sibling = tmp_path / "sib"
+    init_project(sibling, name="Sib")
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    jinvoke(["-C", str(root), "link", "map-local", "sib", str(sibling)])
+
+    unmapped = jinvoke(["-C", str(root), "link", "unmap-local", "sib"])
+    assert unmapped.exit_code == 0, unmapped.output
+    assert json.loads(unmapped.output)["result"]["unmapped"] is True
+
+    # 映射没了，回到对象里的相对 locator；那个路径不存在，所以如实 unresolved
+    status = json.loads(jinvoke(["-C", str(root), "link", "status", "sib"]).output)["result"]
+    assert status["local_mapped"] if "local_mapped" in status else True
+    assert "local_mapped" not in status
+
+
+def test_link_unmap_local_path_is_a_noop_without_a_mapping(root):
+    jinvoke(["-C", str(root), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    result = jinvoke(["-C", str(root), "link", "unmap-local", "sib"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["result"]["unmapped"] is False
+
+
+def test_local_toml_is_git_ignored(tmp_path):
+    """§7 / §3：.pjt/local/ 不进 Git。必须真建一个 git 仓库，否则这条断言形同虚设。"""
+    repo = _git_repo(tmp_path / "repo")
+    init_project(repo, name="Ignored")
+    probe = subprocess.run(
+        ["git", "-C", str(repo), "check-ignore", "-q", ".pjt/local/local.toml"],
+        capture_output=True,
+    )
+    assert probe.returncode == 0, ".pjt/local/local.toml must be git-ignored (§7)"
+
+    # 确认 .gitignore 是项目自带的那条，而不是环境里的 global 配置在兜底
+    matched = subprocess.run(
+        ["git", "-C", str(repo), "check-ignore", "-v", ".pjt/local/local.toml"],
+        capture_output=True,
+        text=True,
+    )
+    assert ".pjt/local/" in matched.stdout
+
+
+def test_map_local_writes_a_git_ignorable_file(tmp_path):
+    """映射写完之后，git 依然看不到这个绝对路径。"""
+    repo = _git_repo(tmp_path / "repo")
+    init_project(repo, name="Ignored")
+    sibling = tmp_path / "sib"
+    init_project(sibling, name="Sib")
+    jinvoke(["-C", str(repo), "link", "add", "sib", "sibling", "--kind", "local_project"])
+    jinvoke(["-C", str(repo), "link", "map-local", "sib", str(sibling)])
+
+    tracked = subprocess.run(
+        ["git", "-C", str(repo), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert str(sibling) not in tracked

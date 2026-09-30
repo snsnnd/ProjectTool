@@ -174,6 +174,20 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec("link.remove", links.link_remove, True, "link", "remove link"),
         MethodSpec("link.resolve", links.link_resolve, False, "link", "resolve link locally"),
         MethodSpec("link.status", links.link_status, False, "link", "link status"),
+        MethodSpec(
+            "link.map_local_path",
+            links.link_map_local_path,
+            True,
+            "link",
+            "record a machine-local absolute path for a link (local.toml, no event)",
+        ),
+        MethodSpec(
+            "link.unmap_local_path",
+            links.link_unmap_local_path,
+            True,
+            "link",
+            "drop a machine-local path mapping (local.toml, no event)",
+        ),
         # git（只读感知；link_commit 只写 .pjt，不写仓库）
         MethodSpec("git.available", gits.git_available, False, "git", "git availability"),
         MethodSpec("git.status", gits.git_status, False, "git", "changed files + candidate areas"),

@@ -7,7 +7,12 @@ from typing import Annotated
 import typer
 
 from project_tool.cli.common import ExpectedRev, console, execute
-from project_tool.cli.render import render_link_list, render_link_status
+from project_tool.cli.render import (
+    render_link_list,
+    render_link_map,
+    render_link_status,
+    render_link_unmap,
+)
 
 link_app = typer.Typer(help="Linked projects", no_args_is_help=True)
 
@@ -103,3 +108,19 @@ def link_remove(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> N
 def link_status(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> None:
     """Show a linked project's resolution status (never claims more than it can prove)."""
     execute(ctx, "link.status", {"name": name}, render=render_link_status)
+
+
+@link_app.command("map-local")
+def link_map_local(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument()],
+    path: Annotated[str, typer.Argument(help="Absolute path on this machine")],
+) -> None:
+    """Record this machine's absolute path for a link (goes to .pjt/local/local.toml)."""
+    execute(ctx, "link.map_local_path", {"name": name, "path": path}, render=render_link_map)
+
+
+@link_app.command("unmap-local")
+def link_unmap_local(ctx: typer.Context, name: Annotated[str, typer.Argument()]) -> None:
+    """Drop a link's machine-local path mapping."""
+    execute(ctx, "link.unmap_local_path", {"name": name}, render=render_link_unmap)

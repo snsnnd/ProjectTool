@@ -269,7 +269,7 @@ pjt artifact add|list|show|edit|attach|detach|remove|verify|history
 pjt member add|list|show|edit|map-git|deactivate|activate|workload|activity|use
 pjt update add|list|show|edit|archive|history
 pjt decision add|list|show|accept|reject|supersede|history
-pjt link add|list|show|remove|resolve|status
+pjt link add|list|show|remove|resolve|status|map-local|unmap-local
 pjt log [--task --member --since --type]
 pjt graph [tasks|milestone <id>|projects]
 ```
@@ -296,6 +296,28 @@ pjt graph [tasks|milestone <id>|projects]
 `pjt status` 的 `computed blocked` 每一行内联显示归属（Area 名 · Milestone 标题），
 但**不列举全部 Area** —— 归属信息只出现在 blocked 条目上。
 裸 `pjt git`（不带子命令）打印 Git 感知可用性与 project root / git root 的关系。
+
+#### link 的机器本地路径（§7）
+
+link 对象提交进 Git、团队共享，因此 locator 只能是**相对项目根**的路径。
+真实项目常在不可相对寻址的位置（不同盘、Windows 盘符、未纳入版本库的目录），
+这时把本机绝对路径记进 `.pjt/local/local.toml`：
+
+```bash
+pjt link add sib sibling --kind local_project   # 对象里放可移植的 locator
+pjt link map-local sib /abs/path/to/sibling    # 本机绝对路径 -> local.toml
+pjt link status sib                            # 映射生效，报 resolved
+pjt link unmap-local sib                       # 删除映射，回落到对象里的 locator
+```
+
+`link.resolve` / `link.status` 优先用 `local.toml` 的映射，并在输出里标明
+`local_mapped` / `local_path` 究竟用的是哪一个。
+
+**这两个 method 不发事件**：`local.toml` 不进 Git 而 `events/` 进 Git，
+写事件等于把绝对路径抄进共享历史，等于绕过 §7。`member_use` 写 `local.actor`
+同理。副作用是「谁在这台机器上配了什么」保持为本机知识。
+`link.map_local_path` 也不会因为路径存在就宣称成功——`has_project` 只说明
+探测到了 `.pjt/project.json`，真正是否解析成功由 `link.status` 判定（§12）。
 
 ## 7. 未来 HTTP 映射（V1/V2 预定）
 

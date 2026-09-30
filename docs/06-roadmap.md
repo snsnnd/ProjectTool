@@ -96,10 +96,40 @@ dogfooding 后调整顺序：真实摩擦最大的是“任务 ↔ 产物”关�
 ```
 
 **未做**：Search / SQLite 索引 / Local Web / FastAPI / React。
-2 个并发写者的 Git merge 辅助也仍未做（多人协作的前置，见 §V2 的「已知代价」）。
+2 个并发写者的 Git merge 辅助仍未做——这是 `docs/09-handover.md` §8 的下一项。
 
 V1-A **刻意未做**（留到有真实需求时）：Artifact 内容快照（blob/CAS）、
 Area 唯一名约束、Task 多 Area、Search / 索引。
+
+### V1-B.2 — 触达补完 + 终端渲染（已完成，`0.4.0`）
+
+不新增任何领域概念。两条线：
+
+**CLI 触达率补到 100%**。registry 里有 22 个 method 此前没有任何 CLI 入口——
+它们早就存在于 service + registry，只是摸不到。补上：
+
+```text
+goal archive/restore · area tasks/set-parent/match-path/history
+update edit/archive/history · decision history · link status
+task set-parent · 裸 pjt git（打印 Git 感知可用性）
+```
+
+**link 的机器本地路径写入口**（§7 的一半实现，之前只做了读侧）。
+`LocalState.links` 被 `link.resolve` 读取，却**没有任何东西能写它**——
+于是「绝对路径只进 local.toml」这条规则无法落地，`link add` 遇到绝对路径
+只能报错并指向一个不存在的出路。补上 `link.map_local_path` /
+`link.unmap_local_path` + CLI `link map-local` / `unmap-local`：
+
+- 绝对路径只落 `local.toml`；objects / events / project.json 一律不出现（有测试逐个目录扫）
+- **不发事件**：`local.toml` 不进 Git 而 `events/` 进 Git，写事件等于把绝对路径抄进共享历史
+- 也不因为「路径存在」就宣称成功，`has_project` 只表示探测到 `.pjt/project.json`
+
+**渲染修复**（V0.1 dogfooding 报告 P2-3 / P3-7）：
+
+- 表格长标题按显示宽度截断加 `…`，不折行（全角算 2 列）；只有 Title 列伸缩，
+  其余列 `min_width` 钉死，避免 rich 把 `status` 压成 `inb…`
+- `pjt status` 的 computed blocked 内联显示 Area 名与 Milestone 标题；
+  **仍不列举全部 Area**（V1-A 的决定），归属只出现在 blocked 条目上
 
 ### ~~V2 — 远程协作~~（❌ 已决定不做）
 

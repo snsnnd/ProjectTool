@@ -23,7 +23,8 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（271 passed）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
-  **Artifact** / Link；Service 108 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个）。
+  **Artifact** / Link；Service 110 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
+  `link.map_local_path`/`unmap_local_path`）。
 - 真实使用：EFW Studio（`framework@tmp/new` 的 `new/efw`）已完成两轮 dogfooding，零源码污染；
   数据保留在 `new/efw/.pjt`。报告：`dogfooding/report.md`（V0.1）、
   `dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（V1-A）。

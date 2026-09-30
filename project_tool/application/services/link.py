@@ -133,6 +133,9 @@ class LinkService:
         if link.target.kind == LinkKind.LOCAL_PROJECT:
             mapped = self.ctx.opened.local.links.get(link.name, {}).get("path")
             locator = mapped or link.target.locator
+            if mapped:
+                result["local_mapped"] = True
+                result["local_path"] = mapped
             if locator:
                 target_root = Path(locator)
                 if not target_root.is_absolute():
@@ -166,6 +169,55 @@ class LinkService:
 
     def link_status(self, name) -> dict[str, Any]:
         return self.link_resolve(name)
+
+    # --------------------------------------------------------- 机器本地路径
+
+    def link_map_local_path(self, name, path) -> dict[str, Any]:
+        """把 link 指向的**机器本地绝对路径**记进 `.pjt/local/local.toml`。
+
+        为什么需要它：link 对象是提交进 Git、团队共享的，绝对路径不能写进去
+        （§7）。但真实项目常常不在同一个可相对寻址的位置（不同盘、Windows
+        盘符、未纳入版本库的目录）。对象里放可移植的 locator，绝对路径放本机。
+
+        **不发事件**：`local.toml` 不进 Git，`events/` 进 Git——写事件等于把
+        绝对路径抄进共享的历史里，等于绕过 §7。`member_use` 写 `local.actor`
+        同理。不发事件也让「谁在这台机器上配了什么」保持为本机知识。
+        """
+        link = self._link(name)
+        text = str(path or "").strip()
+        if not text:
+            raise InvalidArgument("local path must not be empty")
+        target = Path(text).expanduser()
+        if not (target.is_absolute() or WINDOWS_DRIVE_RE.match(text) or text.startswith("\\")):
+            raise InvalidArgument(
+                f"local link path must be absolute, got {text!r}; "
+                "a relative path belongs in the link object instead (pjt link edit)"
+            )
+        self.ctx.opened.local.links.setdefault(link.name, {})["path"] = str(target)
+        self.ctx.opened.save_local()
+        probe = Path(str(target)) / ".pjt" / "project.json"
+        return {
+            "name": link.name,
+            "path": str(target),
+            "probe": str(probe),
+            # 不因为「路径存在」就宣称成功——真正读到 project.json 由
+            # link.status 判定（§12：resolved 不许说谎）。
+            "has_project": probe.is_file(),
+            "note": (
+                "mapped; link.status will report resolved once .pjt/project.json is readable"
+                if not probe.is_file()
+                else "mapped"
+            ),
+        }
+
+    def link_unmap_local_path(self, name) -> dict[str, Any]:
+        """删掉某个 link 的机器本地路径映射，回落到对象里的 locator。"""
+        link = self._link(name)
+        existed = self.ctx.opened.local.links.get(link.name, {}).pop("path", None)
+        if self.ctx.opened.local.links.get(link.name) == {}:
+            self.ctx.opened.local.links.pop(link.name, None)
+        self.ctx.opened.save_local()
+        return {"name": link.name, "unmapped": existed is not None, "path": existed}
 
     # ----------------------------------------------------------------- 内部
 
@@ -204,6 +256,9 @@ class LinkService:
             raise InvalidArgument("local_project link requires a relative locator path")
         if Path(text).is_absolute() or WINDOWS_DRIVE_RE.match(text) or text.startswith("\\\\"):
             raise InvalidArgument(
-                "absolute paths are not allowed in .pjt objects; "
-                "map machine-specific paths in .pjt/local/local.toml"
+                "absolute paths are not allowed in .pjt objects: link objects are "
+                "committed and shared, and machine-specific paths belong in "
+                ".pjt/local/local.toml (docs/04). Either use a path relative to the "
+                "project root, or keep the link portable and record this machine's "
+                "path with `pjt link map-local <name> <absolute-path>`."
             )
