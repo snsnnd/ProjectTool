@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import json
+
+from typer.testing import CliRunner
+
+from project_tool.cli.main import app
+
+runner = CliRunner()
+
+
+def invoke(args):
+    return runner.invoke(app, args)
+
+
+def test_cli_full_flow(tmp_path):
+    assert invoke(["-C", str(tmp_path), "init", "--name", "Demo"]).exit_code == 0
+    assert invoke(["-C", str(tmp_path), "member", "add", "alice", "--name", "Alice"]).exit_code == 0
+
+    result = invoke(["--json", "-C", str(tmp_path), "task", "add", "T1", "--owner", "alice"])
+    assert result.exit_code == 0, result.output
+    task_id = json.loads(result.output)["result"]["id"]
+
+    result = invoke(["--json", "-C", str(tmp_path), "task", "list"])
+    rows = json.loads(result.output)["result"]
+    assert rows[0]["id"] == task_id
+    assert rows[0]["owner_ids"]
+
+    assert invoke(["-C", str(tmp_path), "task", "done", task_id]).exit_code == 0
+    assert invoke(["-C", str(tmp_path), "status"]).exit_code == 0
+    assert invoke(["-C", str(tmp_path), "doctor"]).exit_code == 0
+    assert invoke(["-C", str(tmp_path), "log", "--since", "1d"]).exit_code == 0
+    assert invoke(["-C", str(tmp_path), "graph", "tasks"]).exit_code == 0
+
+
+def test_cli_json_error_shape(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    result = invoke(["--json", "-C", str(tmp_path), "task", "show", "TSK-01K8H2MBQX"])
+    assert result.exit_code == 4
+    payload = json.loads(result.output)
+    assert payload["error"]["code"] == "NOT_FOUND"
+
+
+def test_cli_dependency_cycle_exit_code(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+
+    def add(title):
+        result = invoke(["--json", "-C", str(tmp_path), "task", "add", title])
+        return json.loads(result.output)["result"]["id"]
+
+    a = add("A")
+    b = add("B")
+    assert invoke(["-C", str(tmp_path), "task", "depend", a, b]).exit_code == 0
+    result = invoke(["--json", "-C", str(tmp_path), "task", "depend", b, a])
+    assert result.exit_code == 3
+    assert json.loads(result.output)["error"]["code"] == "DEPENDENCY_CYCLE"
+
+
+def test_cli_porcelain_list(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    invoke(["-C", str(tmp_path), "task", "add", "T1"])
+    result = invoke(["--porcelain", "-C", str(tmp_path), "task", "list"])
+    assert result.exit_code == 0
+    line = result.output.strip().splitlines()[0]
+    fields = line.split("\t")
+    assert len(fields) == 6
+    assert fields[1] == "inbox"
+
+
+def test_cli_doctor_fails_on_tamper(tmp_path):
+    invoke(["-C", str(tmp_path), "init", "--name", "Demo"])
+    result = invoke(["--json", "-C", str(tmp_path), "task", "add", "T1"])
+    task_id = json.loads(result.output)["result"]["id"]
+    path = tmp_path / ".pjt" / "objects" / "tasks" / f"{task_id}.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["title"] = "tampered"
+    path.write_text(json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    assert invoke(["-C", str(tmp_path), "doctor"]).exit_code == 9
