@@ -70,8 +70,10 @@ project_tool/
 │   ├── dependency.py       # 依赖环、computed blocked
 │   └── project_graph.py    # 任务树 / 项目树 / 里程碑进度
 │
-├── integrations/           # 外部系统适配（V1：git.py）
-│   └── filesystem.py       # 原子写、fsync_dir、JSON 读写
+├── integrations/           # 外部系统适配
+│   ├── filesystem.py       # 原子写、fsync_dir、JSON 读写
+│   │                       # + retry_on_sharing_violation（Windows 共享冲突重试）
+│   └── git.py              # Git 只读适配器（运行时子命令白名单）
 │
 └── cli/
     ├── main.py             # Typer root + 全局选项 + 子命令注册
@@ -80,6 +82,7 @@ project_tool/
     ├── project.py          # init/status/doctor/migrate
     ├── task.py / goal.py / milestone.py / member.py
     ├── update.py / decision.py / link.py / log.py / graph.py
+    ├── area.py / artifact.py / interface.py / git.py
     └── __init__.py
 ```
 
@@ -128,7 +131,7 @@ from project_tool.api import ...   # 出现在 application/ 以下
 - method 名称 `<domain>.<action>`，与 CLI 子命令、未来 REST 路由一一对应。
 - **显式 registry**（`application/registry.py`）：每个 method 注册
   `MethodSpec(name, handler, mutating, category, description)`；
-  未知 method → `INVALID_ARGUMENT`。V0.1 共 83 个 method。
+  未知 method → `INVALID_ARGUMENT`。当前共 123 个 method（V0.1 时是 83）。
 - `system.capabilities` 返回 `protocol_version / schema_version / methods / features`，
   供 Web / SDK 做能力发现；features 当前全部为 false（artifact/git/search/web/remote/sync）。
 - `ProjectService.call(method, params)` 与 `handle(...)` 与 V0 完全兼容。
@@ -157,6 +160,27 @@ roll-forward apply（对象先、事件后，os.replace）
 manifest applied → 更新派生 state → 删除事务目录
   ↓
 Release lock
+```
+
+**Windows 上第 11 步会失败，所以它不是裸 `os.replace`。** Python 打开文件不带
+`FILE_SHARE_DELETE`，任何读（`task next` / `list` / `doctor` 都在锁**之外**）
+落在替换窗口里都会让写的一方拿到 `WinError 32`——而锁只串行化**写**，挡不住
+这个。所有原子写、读、删锁都走
+`filesystem.retry_on_sharing_violation`（40 × 25ms），非 Windows 上不重试。
+详见 `docs/04` §6.1。
+
+## 5.1 读路径上的一个 Area
+
+读不经过 WriteLock，也不经过事务：直接读 `objects/` 并**校验 rev**。
+`verify_rev` 是读即校验（被外部篡改的对象读取即 `PROJECT_CORRUPTED`，
+不允许靠下一次写入洗白）；只有 `doctor` 与 `resolve_actor` 豁免，
+因为数据已经损坏时它们必须仍能工作。
+
+派生视图（`queries.py`：`status` / `log` / `workload` / `area_activity` /
+`task_next` / `task_related_interfaces`）都是**只读推导**：computed blocked、
+Milestone progress、Area 活跃度、接口契约相关性一个都不落库。
+`area_activity` 尤其要注意——`git log` 跟着 Git 走所以所有人可见，
+`git status` 只有本机能看，所以两者必须分开输出并标 "THIS machine only"。
 ```
 
 崩溃语义见 [04-storage.md](04-storage.md) 与 [07-v0.1-audit.md](07-v0.1-audit.md)：

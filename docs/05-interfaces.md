@@ -1,4 +1,4 @@
-# Project Tool — 接口规范（V0.1）
+# Project Tool — 接口规范（对齐 v0.6.7）
 
 本文件定义三类接口：
 
@@ -36,7 +36,7 @@ system.capabilities
   "methods": ["area.archive", "goal.archive", "..."],
   "features": {
     "area": true,
-    "artifact": false,
+    "artifact": true,
     "git": true,
     "search": false,
     "web": false,
@@ -194,7 +194,9 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
   **读取时**就报 `PROJECT_CORRUPTED`，而不是等到下一次写入把它「洗白」重新签名。
   例外：`get_raw` / `list_raw` / `load_raw` 是读字节，不校验；
   `doctor` 用 `check_rev=False`，保证数据已损坏时仍能出报告。
-- 列表方法统一支持 `limit`；日志/列表按时间倒序。
+- **只有日志系接受 `limit`**（`pjt log -n` / `pjt area activity --limit`）。
+  各域的 `*.list` **不接受** `limit`——给它们传 `limit` 会得到 `TypeError`
+  （未捕获，不走错误码，会退化成裸 traceback）。列表按时间倒序。
 - 时间参数（`since` / `until`）接受 ISO-8601 或相对时间 `7d` / `24h` / `30m`。
 - 引用校验：新引用不得指向 `lifecycle=deleted` 的对象；
   不得把任务分配到 inactive member 或 `closed/cancelled` milestone。
@@ -243,8 +245,9 @@ Usage error（Typer 解析失败）固定 exit 2。
 ```text
 pjt [--json] [--porcelain] [--as MEMBER] [-C PATH] <command>
 
---json       输出 RPC 形式的 JSON（机器可读）
---porcelain  稳定纯文本，列分隔固定，供脚本解析
+--json       输出 RPC 形式的 JSON（机器可读）。**根命令选项，必须在子命令之前**
+--porcelain  稳定纯文本（**仅 pjt log / pjt status / pjt task list 已实现**，
+            其余命令会静默回落到人类表格；要脚本消费请用 --json）
 --as         指定本次操作的 Actor（覆盖 local.toml）
 -C           指定项目路径（默认从 cwd 向上查找 .pjt）
 --version    版本

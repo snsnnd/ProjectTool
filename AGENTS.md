@@ -58,7 +58,8 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     **Artifact 只是引用**：`kind=file` 的 locator 必须是 project-relative 路径；
     任何写路径都不得 copy/move/delete/rename 被引用的工程文件。
 11. **Git 适配器只读**：`integrations/git.py` 的 `run()` 有运行时子命令白名单
-    （`rev-parse` / `status` / `log` / `show`），且一律加 `--no-optional-locks`。
+    （`rev-parse` / `status` / `log` / `show` / `ls-files`），且一律加
+    `--no-optional-locks` 与 `-c core.quotepath=false`。
     绝不 clone/add/commit/checkout/merge/reset/clean/push/fetch。
     `git status` 只**推导**候选 Area，**绝不回写 `Task.area_id`**。
 12. **`link.resolve` 不许说谎**：`resolved` 只能为 true 当它真的读到了对方

@@ -1,4 +1,4 @@
-# Project Tool — 交接文档（V0.2 / V1-A → V1-B）
+# Project Tool — 交接文档（对齐 v0.6.7 / V1-C 收尾）
 
 > 给下一位接手的开发者 / agent。先读本文件，再按需读 `docs/02`–`docs/08`。
 > 仓库：`https://github.com/snsnnd/ProjectTool`（origin fetch 为 HTTPS，push 走 SSH）。
@@ -17,21 +17,30 @@ Git tracks code. Project Tool tracks the project.
 
 | 项 | 值 |
 |---|---|
-| 版本 | `0.3.1`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
-| 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 |
-| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **483 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
-| 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（Area 映射、Artifact 关联、零污染树哈希） |
-| Service API | 显式 registry，**117 个 method**（CLI 全部触达；`log.*` 经 `pjt log --entity/--member/--since` 与 `pjt <type> history` 可达），`system.capabilities` 可发现（`area/artifact/git = true`） |
-| 已实现 | **Git 感知（只读）**：`git.available` / `git.status` / `git.log` / `git.link_commit` + `Area.path_patterns` |
+| 版本 | `0.6.7`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
+| 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 → `d1882aa` CLI 补完 → `c0066aa` 派生缓存治理 → `74249ad` Area owner + 接口契约 → `26b5718` Area 活跃度 → `5ebcaec` KC 打包面 → `3db3c70`/`eaf481f` task claim / `task next` → `41f6581`~`81cff1e` Windows 并发正确性 → `8f75e7a` 全项目复查修复 |
+| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **561 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
+| 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`；V1-C：`dogfooding/scripts/` 下 `multiwriter_probe` / `area_activity_demo` / `interface_check_probe` / `multiagent_demo` |
+| Service API | 显式 registry，**123 个 method**；CLI **117 个命令** + 12 个分组，**112 个 method 有 CLI 入口**（见下方缺口说明） |
+| 已实现 | Git 感知（只读）· 派生缓存不进 Git · **Area owner**（`area set-owner`）· **接口契约**（`interface init/register/check/sync`）· **Area 活跃度**（`area activity`）· **多 agent 认领**（`task next/claim/release`）· **Windows 共享冲突重试** |
+| 机器可读面 | `system.capabilities`（`detail=True` 给 `mutating` / `category` / `description`）+ `system.cli`（KC 靠它发现能驱动什么） |
 | 未实现 | Search / SQLite 索引 / Web / Artifact 内容快照 / 多人 merge 辅助 |
-| 已砍掉 | Remote / Sync / Accounts / Webhook / KC（见 `docs/06` §V2：协作走 Git，不自建服务器） |
+| 已砍掉 | Remote / Sync / Accounts / Webhook / Web UI（协作走 Git，不自建服务器）。KC **不是被砍**——它是接入方，本仓提供打包面与 `docs/10-kc-integration.md` |
+
+**CLI 入口缺口（诚实起见，别被"117 个命令"骗了）**：123 个 method 里 11 个没有
+CLI 入口，分三类——4 个**有意只给 API**（`system.capabilities` / `system.cli` /
+`system.info` 给程序用，`project.open` 是内部基础设施）；2 个**经 flag 或共享
+渲染可达**（`project.recover` = `pjt doctor --repair`，`git.available` =
+`pjt git status` 的可用性判定）；**剩下 5 个是真空缺口**：`log.get` /
+`log.entity` / `log.member` / `log.since` / `graph.dependencies`——有实现、能调
+service，但用户手边没有命令。补它们是新增功能，不是收尾。
 
 ## 2. 新接手者 15 分钟上手
 
 ```bash
 cd /path/to/ProjectTool
 uv sync
-uv run pytest                          # 483 passed
+uv run pytest                          # 561 passed
 uv run ruff check . && uv run mypy project_tool
 
 # 在临时目录体验完整流程（不要污染别人的真实项目）
@@ -62,8 +71,8 @@ ProjectTool/
 │   ├── graph/           # 依赖/层级/进度推导
 │   ├── integrations/    # filesystem（原子写、fsync）
 │   └── cli/             # Typer：main/common/render + 各域模块
-├── tests/               # 26 个测试文件，483 cases
-├── docs/                # 01–09（09-handover = 本文件，09-v1a-design = 本轮设计记录）
+├── tests/               # 29 个测试文件，561 cases
+├── docs/                # 01–10（09-handover = 本文件，10-kc-integration = KC 接入参考）
 ├── dogfooding/          # EFW 真实项目验证报告 + 证据 + 可复现脚本
 ├── pyproject.toml       # uv；dev 依赖 pytest/ruff/mypy；ruff+mypy 配置
 └── .github/workflows/   # CI
@@ -119,11 +128,39 @@ CLI / Web / SDK
     省略 = 用当前 rev 作 base_rev；提供 = 必须相等，否则 `REVISION_CONFLICT`。
     不允许任何领域自己写 `if expected_rev != model.rev`。
 14. **Milestone ≠ Area**：Milestone 是阶段/交付（有 status、due_at、派生 progress）；
-    Area 是稳定模块/工作领域（只有 name / description / parent_area_id，
+    Area 是稳定模块/工作领域（name / description / parent_area_id / `owner_ids`，
     **读视图也没有 progress**）。不要给 Area 加进度或截止时间。
-15. **Area ≠ Label**：Label 是自由标签（`bug` `test` `high-risk`），
+    **也不要**给 Milestone / Goal 加 `owner`——只有 Area 是分区单元，
+    到处加会让 Area 退化成第二个 Milestone。
+15. **Area 分区靠 owner，公共区靠复数**：每个 Area 显式设置 `owner_ids`（不推导）。
+    **1 个 owner = 私有块，多个 = 公共接口区**（如被 UI/数据流/状态机共同依赖的
+    core）——不需要额外的 `shared` 字段。`area set-owner` 是**增删**语义
+    （`--add` / `--remove`），`area create` 不收 `owner_ids`。
+16. **Area ≠ Label**：Label 是自由标签（`bug` `test` `high-risk`），
     Area 是有类型、有层级、被 doctor 校验引用完整性的稳定分区。
     `refs/labels.json` 只聚合 Task.labels。
+17. **派生缓存不进版本控制**：`.pjt/state/state.json` 与 `.pjt/refs/labels.json`
+    是每次写入都会变的缓存，被提交就会让**每一次**并发合并都冲突
+    （V1-C 探针实测 1/9 vs 8/9）。`pjt init` 写好 ignore 规则、`pjt migrate`
+    给老项目幂等补齐、`pjt doctor` 把「被 git 跟踪」判为 **error**。
+    工具只报告，`git rm --cached` 由人执行（Git 适配器只读，§11）。
+18. **不做本地权限门禁**：工具将来上服务器，权限以服务器为准。`.pjt/objects/**`
+    是可读 JSON 跟着 Git 走，本地门禁只会制造「已经管住了」的错觉。
+    `Member.roles` 是自由字符串，`KNOWN_ROLES` 只是建议词汇表（未知值 = warning，
+    不是 error——老项目可能有自由 role，不能因此判 corrupted）。
+19. **接口契约不是一等对象**：它是工作树里一份**固定模板**的 markdown + 注册成
+    `kind=file` 的 Artifact（靠 `metadata.interface=true` 标记身份）。
+    正文是人写的散文，硬塞进 JSON 只会让人绕过工具；diff/blame/历史 Git 已经做得
+    更好。`pjt interface check` 只报告不改写，有 error 时退出码 1（可直接当 CI 门禁）。
+20. **别人的在途工作看不见，这是架构事实不是 bug**：`git log` 跟着 Git 走所以
+    所有人都能看到；`git status` 只有本机能看。`area activity` 因此把两者
+    分开输出并标 "THIS machine only"。**不要**把两者混成一张「谁在做什么」
+    的表——那会让人以为缺席就是没人在动。
+21. **Windows 上的读会打断写，锁挡不住**：Python 打开文件不带 `FILE_SHARE_DELETE`，
+    所以只要有人开着目标文件，`os.replace` / `unlink` 就是 `WinError 32`。读
+    （`task next` / `list` / `doctor`）都在写锁**之外**，撞上了就是一次崩溃。
+    原子写/读/删锁一律走 `filesystem.retry_on_sharing_violation`（40 × 25ms），
+    非 Windows 上不重试。**别把它改回裸 `os.replace`** —— 详见 docs/04 §6.1.
 16. **Artifact 只是引用**：没有 blob / CAS / snapshot。
     `kind=file` 的 locator 必须是 project-relative POSIX 路径；
     **任何写路径都不得 copy/move/delete/rename/rewrite 被引用的工程文件**。
@@ -185,10 +222,18 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
 | `test_locking.py` | 活 PID 保护、死 PID 回收、ownership、陈旧锁 |
 | `test_transaction_recovery.py` | 故障注入（staged/manifest/COMMIT/部分 apply/state）、恢复幂等；Area create / Artifact attach 崩溃 roll-forward |
 | `test_validation.py` | 长度/重复/删除引用/inactive/closed milestone/层级环 |
-| `test_events.py` | 不可变性、payload 契约 |
-| `test_registry.py` | capabilities、dispatch、错误形状 |
+| `test_events.py` | 不可变性、payload 契约；**事件类型必须登记进 docs/08 的闸门** |
+| `test_registry.py` | capabilities、dispatch、错误形状；命令面与 `CLI_METHOD_MAP` 不脱节 |
 | `test_doctor.py` / `test_cli.py` / `test_graph.py` | 诊断、CLI 全命令、图 |
 | `test_task_ready_cli.py` | `task ready`：状态来源、CLI 薄适配、事件、JSON、computed blocked 不被破坏 |
+| `test_windows_sharing.py` | **Windows 共享冲突重试**：撞了会重试并最终写成功、撞不停会放弃、非 Windows 不重试、删锁同理（只在 Linux 上跑，靠 `IS_WINDOWS` 常量） |
+| `test_multiagent_flow.py` | **多 agent 并行接活**：线程 + barrier 制造确定性认领碰撞，断言不变量而非时序（124ms，进 CI） |
+| `test_claim.py` | `task claim/release/next`：竞态下输家拿 `CLAIMED` 而非 `REVISION_CONFLICT`、到期自动失效、简报带接口契约 |
+| `test_coordination.py` | `task.related_interfaces` 的 linked / same_area / mentioned 三路来源 |
+| `test_area_activity.py` | `area activity` 的 Git 推导、本机 vs 共享的分离、空仓库不崩 |
+| `test_derived_caches_git.py` | 派生缓存被 Git 跟踪时 doctor 判 **error**（不是 warning） |
+| `test_cli_completeness.py` | 每个域命令的选项与只读/可写语义；`link.map_local_path` 零事件 |
+| `test_conflict.py` / `test_gap_fixes.py` | 并发冲突形状；历史上补的洞各自一个回归测试 |
 | `test_expected_rev.py` | 七领域 × 正确/过期/省略 三态 + no-op 也不吞过期 rev |
 | `test_area.py` | Area CRUD、Task 归属与过滤、层级环、doctor、事件、迁移兼容 |
 | `test_artifact.py` | locator 安全（含合法空格）、关系、verify（存在/缺失/穿越/绝对路径/URL）、rev、事件、doctor、零写入 |
@@ -217,17 +262,21 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
 - `pjt member map-git`（`--git-name` / `--git-email` 可重复）——Git 适配器的自然延伸。
 - 顺带堵了一个洞：`./.pjt/xxx` 这类 pattern 之前能绕过 `.pjt` 检查（只看了首段）。
 
+**这一段曾列的三条缺口都已补齐**（留着当记录）：`pjt status` 的 blocked 列表
+已内联 Area 名与 Milestone 标题；长标题按**显示宽度**截断加 `…`（全角算 2 列）；
+`goal.archive/restore`、`update.update/archive`、`area.history`、
+`decision.history`、裸 `pjt git` 全部有了 CLI 入口。
+
 **仍未做（按优先级）**
 
-- `pjt status` 的 computed blocked 列表未带 milestone / area（纯渲染，随时可改）。
-- 长中文标题在终端表格/树中折行（纯显示）。
-- `goal.archive` / `goal.restore` / `update.update` / `update.archive` /
-  `area.history` / `decision.history` / `pjt git`（裸命令）**仍无 CLI**，
-  只有 Service method。属于整洁性缺口，可攒着做。
 - Artifact `file` 缺失时 doctor 报 warning——**这是有意的**：分支切换/删除工程文件很常见，
   不能当数据损坏。但目前没有「这个 artifact 已经不需要了」的批量清理入口（只有单条 remove）。
+- 5 个 method 没有 CLI 入口（见 §1 的诚实清单）。补它们是新增功能，不是收尾。
+- `system.cli` 遇 TyperGroup 会短路，所以 `git` 节点是 `kind: "group"`、
+  `method: null`，`git.available` 不出现在命令面里——它只经 `pjt git status`
+  的可用性判定可达。若 KC 需要它独立可见，得改 `cli_surface` 的遍历逻辑。
 - `artifact.list` / `task.related_artifacts` 每次都是全量 file scan；15 任务规模无压力，
-  上千 artifact 时需要 Search/Index（V1-B）。
+  上千 artifact 时需要 Search/Index。
 
 **模型层待决 / 已决**
 
@@ -262,10 +311,15 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
 
 ## 9. 路线图现状
 
-V0 → V0.1 → V1-A → V1-A.1 → **V1-B（Git 感知层）全部完成**。
+V0 → V0.1 → V1-A → V1-A.1 → V1-B（Git 感知层）→ **V1-C 四步全部完成**。
 
 | 项 | 状态 |
 |---|---|
+| V1-C ① 派生缓存不进 Git（`pjt init` 写规则 / `migrate` 补齐 / `doctor` 判 error） | ✅ |
+| V1-C ② Area owner（单 owner=私有块，多 owner=公共接口区）+ 接口契约 | ✅ |
+| V1-C ③ `area activity`（Git 推导，区分本机未提交） | ✅ |
+| V1-C ④ `task next` / `task claim` / `task release` + `task related-interfaces` | ✅ |
+| Windows 共享冲突重试（`retry_on_sharing_violation`） | ✅ |
 | Area ↔ 目录（`path_patterns`，可选） | ✅ |
 | `integrations/git.py` 只读适配器（运行时子命令白名单） | ✅ |
 | `git.available` / `git.status` / `git.log` / `git.link_commit` | ✅ |
@@ -276,10 +330,10 @@ V0 → V0.1 → V1-A → V1-A.1 → **V1-B（Git 感知层）全部完成**。
 
 **剩下的（未排期，按需要挑）**
 
-1. **降低同对象并发**（V1-C 当前主线）— 合并本身已经不是瓶颈：探针证明除
-   「两人改同一对象」外都能干净合并。20 人规模下真正会天天发生的是同对象冲突。
-   先做只读建议（如 `pjt task suggest-owner` 指出热点任务）还是直接做 claim，
-   取决于实际协作形态。**不要**做自动合并。
+1. ~~**降低同对象并发**~~ — **已完成**（V1-C ② + ④）：`area set-owner` 做分区，
+   `task next/claim/release` 做认领，claim 到期自动失效，不需要定时清理。
+   合并本身早已不是瓶颈（`multiwriter_probe` 证明除「两人改同一对象」外都能干净
+   合并）。**不要**做自动合并。
 2. **多人 Git merge 辅助** — 「无 remote」这个决定的实质代价，现在只剩真冲突这一类。
    最小版本：`pjt doctor --resolve-merge` 之类，只读分析 + 给建议，不自动改。
    **不要**为了这个去做同步服务器。

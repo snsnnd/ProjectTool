@@ -33,7 +33,7 @@ DEV-F12A81       Device
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "id": "TSK-01K8H2MBQX",
   "type": "task",
   "project_id": "PRJ-01K8H1ERK8",
@@ -109,7 +109,7 @@ Task 状态语义：
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "id": "PRJ-01K8H1ERK8",
   "type": "project",
   "name": "EFW",
@@ -355,7 +355,7 @@ git log --name-only --since=N.days.ago
 ```markdown
 ---
 name: store.updateModel
-kind: store_api          # module_api | store_api | event | protocol | other
+kind: store_api          # **由本项目自定义**，工具不校验、不设默认值
 status: draft            # draft | review | agreed | deprecated
 area: core               # **Area 名字**，不是 ARA- id —— 这份文档是给人看的
 owners: [jichao]
@@ -375,8 +375,11 @@ version: 1
 - **front-matter 是机器可读的**（将来做自动索引：谁依赖什么、哪些是 `agreed`），
   正文必需章节是**强制沟通清单**。解析刻意不引入 yaml 依赖——依赖越少，
   20 个人在各自机器上装出来的行为越一致。
-- 必填字段只有 `name` / `status` / `area` / `kind`。`consumers` **按 status 分级**：
-  `draft` 可以空着，`review` / `agreed` 必须写清消费者。
+- 必填字段只有 `name` / `status` / `area`（**`kind` 不在其中**——它由这个项目的人
+  定义，工具不校验也不设默认值，不关心分类的项目可以完全不填；
+  `docs/05` §5 记录了第一版把它设成封闭枚举 `module_api | store_api | …` 是错的）。
+  `consumers` **按 status 分级**：`draft` 可以空着，
+  `review` / `agreed` / `deprecated` 必须写清消费者。
   （第一版把 `consumers` 也设成必填，结果 `interface init` 不带 `--consumer`
   直接失败——而「还没想清楚谁在用」正是 draft 阶段的常态。**没人填得上的必填字段
   比没有更糟**，它只会训练大家绕过检查。）
@@ -438,8 +441,8 @@ design hardware image other`。
 |---|---|---|
 | `file` | `studio_core/debug.py` | 必须是 project-relative 路径；禁绝对路径 / 盘符 / UNC / `..` / `.pjt/**` / 控制字符。**允许普通空格**（`docs/Design Notes.md` 是真实工程常态） |
 | `url` | `https://…` | http(s) + netloc（**不做网络请求**） |
-| `git_commit` | `abc123` | 4–40 位十六进制（Git Adapter 未启用，只存引用） |
-| `git_branch` | `feature/foo` | git ref-name 字符集，无 `..` |
+| `git_commit` | `abc123` | 4–40 位十六进制；`git.log` / `git.link-commit` 会用 `rev-parse --verify` 真正解析它 |
+| `git_branch` | `feature/foo` | git ref-name 字符集，无 `..`，长度 1–255，首尾不得为 `/` |
 | 其余 10 种 | `brd rev C` | 不透明引用；只守住「非机器本地绝对路径」「不逃出 project root」 |
 
 **控制字符**（换行 / 制表 / ESC …）在**所有** kind 的 locator 里都非法——它们会破坏 CLI 表格
@@ -447,9 +450,13 @@ design hardware image other`。
 `url`（RFC 3986 要求百分号编码）、`git_commit`、`git_branch` 禁止任何空白。
 
 `artifact.verify` 是**纯查询**：不产生事件、不修改文件。`file` 检查存在性，
-`url` 只校验格式，`git_*` 报告「adapter 未启用」，其余标记 `skipped`。
+`url` 只校验格式，`git_*` 报告格式合法（真正的解析由 git 适配器做，见
+`services/git.py`），其余标记 `skipped`。
 doctor 对「file 不存在」报 **warning**（分支切换/删除是正常现象），
 对「locator 越界」和「related ID 指向不存在的对象」报 **error**。
+Artifact 的引用完整性遍历 `RELATION_FIELDS`（task/decision/milestone/goal/**area**
+五个关系），所以新增第六个关系字段也不会漏检——V1-C 加 `related_area_ids` 时
+逐字段列举的写法漏过一次。
 
 ### 4.9 Project Link
 
@@ -475,7 +482,7 @@ doctor 对「file 不存在」报 **warning**（分支切换/删除是正常现�
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "id": "EVT-01K8HB39NE",
   "transaction_id": "TXN-01K8HB38ZF",
   "event_type": "task.status_changed",
@@ -558,7 +565,11 @@ Link        target.project_id → Project（另一项目）
 Event       entity_id → 任意对象
 ```
 
-引用完整性由 doctor 校验；悬空引用报告为 `BROKEN_LINK`。
+引用完整性由 doctor 校验：悬空引用落在 `references` 这个检查项里，报 **error**
+加纯文本消息，**不产生错误码**。`errors.py` 里的 `BROKEN_LINK` /
+`PERMISSION_DENIED` / `AUTH_REQUIRED` / `REMOTE_UNAVAILABLE` / `SYNC_CONFLICT`
+至今零处抛出——它们是为「已定案但未实现」的功能预留的占位码，
+所以**不要**按它们写 catch / 重试分支：要么数据没问题，要么就直接退出了。
 
 ## 7. 领域校验规则（V0.1）
 

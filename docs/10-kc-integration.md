@@ -85,8 +85,14 @@ docs/interfaces/<slug>.md
 front-matter：`name` / `status`（`draft|review|agreed|deprecated`）/ `area` /
 `kind`（**由项目自定义，工具不校验**）/ `owners` / `consumers` / `version`。
 
+> ⚠️ 必填只有 `name` / `status` / `area`——**`kind` 不在其中**（不关心分类的项目
+> 可以完全不填）。而 `status` 是**唯一仍是封闭词汇的字段**，且**是否该自由化
+> 尚未决策**（见 §7）。下面那段可视化建议是在「词表保持封闭」这个前提下写的。
+>
 > **做"接口状态"可视化的话，入口是这两个**：`status == "agreed"` 表示已谈定，
 > `consumers` 表示谁在依赖。正文是散文，**不要试图解析**。
+> 另外 `owners` / `consumers` / `version` 工具**不维护**——它只读 front-matter、
+> 只同步 `area`（和 `kind`），所以别把它们当成会由工具托管的字段。
 
 ## 3. 接入点
 
@@ -432,6 +438,10 @@ KC 分发的管理员权限，**只能管住"通过 KC 的操作"**。
 | 「谁能通过 KC 建成员/分发 owner」 | 只要 KC 自己的认证 —— **现在就能做到** |
 | 「谁真的不能改 owner」 | **Git 仓库的 ACL 必须与之一致**（分支保护 / 仓库权限） |
 
+⚠️ 上表只说了**工具侧**能做到什么，**服务器端的权限模型本身尚未定义**
+（谁授予、怎么撤、`maintainer` 是不是第 4 个角色，都还没定，见 §7）。
+KC 上线前需要先定那部分，否则「一致」没有基准可比。
+
 工具侧的对应设计：每次 owner 变更都进 **append-only 事件**
 （`area.updated`，payload 带 `from` / `to` / `added` / `removed`），
 所以即使有人绕过 KC 直接改 Git，**改动仍然可审**。这是"记录"而非"拦截"。
@@ -451,7 +461,9 @@ KC 分发的管理员权限，**只能管住"通过 KC 的操作"**。
 **仍待 KC 决定**
 
 4. **`external_ids` 的 key 命名**：`kc_user`？还是 `kc:<org>:user`
-   （一个项目对接多个 KC 组织）？
+   （一个项目对接多个 KC 组织）？—— **§5 的优先级表里已经把 `kc_user` 当成
+   既定锚点在用了**，那是待决问题的一个假设答案，不是结论。定下来之前，
+   KC 侧建表别把 `kc_user` 这个字符串焊死。
 5. **`maintainer` 角色**：EFW 项目在用，不在工具建议词汇表
    （`leader` / `member` / `viewer`）内，`pjt doctor` 会报 **warning**
    （不是 error —— 老项目可能有自由 role，不能因此判数据损坏）。
@@ -463,9 +475,22 @@ KC 分发的管理员权限，**只能管住"通过 KC 的操作"**。
 KC 要的"可视化"，最省事也最不容易腐化的做法是**单文件 HTML 报告**：
 
 ```bash
-pjt area activity --days 7 --html > area-report.html
-pjt --json project.status        # 配合前端渲染
+# ⚠️ 工具**没有** `--html`，HTML 由 KC 侧生成；工具负责给数据。
+# ⚠️ `--json` / `--porcelain` 是**全局**选项，必须放在子命令**之前**。
+pjt --json area activity --area core --days 7
+
+# ⚠️ `status` 是**顶层命令**；`project.status` 是 method 名，CLI 上不能这么写
+pjt --json status
 ```
+
+**`system.cli` 在 CLI 上没有对应命令**——它是 SDK / service 层的 method，
+只能从代码里调：
+
+```python
+surface = ProjectService(opened).call("system.cli", {})
+```
+
+（`pjt --json system.cli` 会报 `No such command`。同理 `system.capabilities`。）
 
 - 一个自包含 HTML，**无框架、无构建、无 SSR、无认证**
 - 可以放进 CI：push 后重新生成，作为 artifact 或 GitHub Pages 发布

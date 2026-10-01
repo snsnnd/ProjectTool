@@ -248,7 +248,9 @@ pjt project    edit|show
 
 ```text
 --json        机器可读的 JSON 输出（RPC 结构）
---porcelain   稳定纯文本，供脚本解析
+--porcelain   稳定纯文本（仅 pjt log / pjt status / pjt task list 有实现）
+              ↑ 这两个是**根命令**选项，必须写在子命令**之前**：
+                pjt --json task list ✅   pjt task list --json ❌
 --as MEMBER   指定本次操作的 Actor（覆盖 local.toml）
 -C PATH       指定项目路径
 --version     版本
