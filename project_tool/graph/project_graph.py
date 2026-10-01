@@ -10,7 +10,7 @@ from project_tool.domain.goal import Goal
 from project_tool.domain.link import Link
 from project_tool.domain.milestone import Milestone
 from project_tool.domain.project import Project
-from project_tool.domain.task import Task
+from project_tool.domain.task import Task, claim_view
 from project_tool.graph.dependency import is_computed_blocked
 
 
@@ -30,6 +30,9 @@ def task_summary(task: Task, tasks: dict[str, Task]) -> dict[str, Any]:
         "labels": list(task.labels),
         "computed_blocked": blocked,
         "blocked_by": blocked_by_ids,
+        # 认领：列表里最需要看见的一列（过期即 None，判定是派生的）
+        "claim": claim_view(task.claim),
+        "claimed": claim_view(task.claim) is not None,
         "lifecycle": task.lifecycle.value,
     }
 

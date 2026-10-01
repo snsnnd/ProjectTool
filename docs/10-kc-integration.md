@@ -180,6 +180,82 @@ KC 通过 Git 取数是唯一正确的方式。要拿 method 的 `mutating` / `c
 `rev`，回传时带上；对象已被别人改过就返回 `REVISION_CONFLICT`，
 KC 重新读一次再让用户确认。**不要静默重试覆盖**。
 
+## 4.4 多 agent 运行时：KC 必须给每个 agent 注入 `PJT_ACTOR`
+
+如果 KC 用**多个 agent** 在同一台机器上（或同一个 `.pjt`）上工作，有一件事
+必须做，否则事件归属会**静默记错人**。
+
+### 问题
+
+`.pjt/local/local.toml` 里的 `actor` 和 `device_id` 是**整台机器共享**的：
+
+```toml
+[local]
+device_id = "DEV-9880A634"
+actor = "MBR-01M3V9PCD0EBJ3SQS"     # 只有一个
+```
+
+所以两个 agent 不做区分时，**两个 task 都会被记成同一个人**（实测）：
+
+```text
+task.created    actor=alice    ← 其实是 agent-b 建的
+task.created    actor=alice
+```
+
+`device_id` 也帮不上忙：它标识的是机器不是进程，而且**根本不在 `log.list` 的
+返回字段里**（只有 7 个字段，要看 `device_id` 得读事件文件）。
+
+### 解法：启动每个 agent 时注入 `PJT_ACTOR`
+
+```bash
+PJT_ACTOR=agent-7 pjt task add "…"      # 认 handle，也认 MBR- id
+```
+
+优先级（实测确认）：`PJT_ACTOR` 环境变量 **>** `.pjt/local/local.toml` 的 `actor`。
+
+```text
+PJT_ACTOR=env-agent   pjt task add …   ->  actor=env-agent
+                       pjt task add …   ->  actor=local-agent   （回落 local.toml）
+```
+
+**这是平台该做的事，不是 agent 自己该记得的事** —— agent 不会主动设环境变量，
+但 KC 在 spawn 每个 agent 时顺手注入是零成本的。
+
+### 同一台机器上的并发安全（实测）
+
+| 场景 | 结果 |
+|---|---|
+| 20 次并发写**同一个** task | 无崩溃 · doctor 干净 · 无锁/事务残留 · 状态是确定值 |
+| 两个 agent 读同一 rev 各写 | 一个成功，一个 `REVISION_CONFLICT`（**不静默覆盖**） |
+| 8 agent 并发各建 task | 8/8 成功，`actor_id` 归属正确 |
+| 32 并发写 | 9.1 s 全部成功，doctor ok |
+
+锁只在**真正落盘那一刻**持有（约 280 ms），而 agent 一个循环是几十秒，
+所以锁占用率极低，不是瓶颈。
+
+### 认领：`pjt task claim`（可选但强烈建议）
+
+并发写本身是安全的，问题是**冲突的代价**：人类撞了重试几秒钟；agent 撞了意味着
+**整个任务已经做完了**（读了代码、改了工作树、调了工具），全部作废。
+而 agent 不会像人一样先问一句"有人在改吗"。
+
+```bash
+pjt task claim TSK-… --agent <handle> [--ttl 30] [--note "..."]   # 认领，带 TTL
+pjt task release TSK-… [--agent <handle>]                        # 主动放弃
+pjt task list --unclaimed                                         # 「给我一件没人做的事」
+pjt task list --claimed-by <handle>
+```
+
+> ⚠️ **`pjt task ready` 不做过滤** —— 它是**状态迁移**（inbox → ready），
+> 不是「列出可做的事」。要拿待办入口用 `pjt task list --unclaimed`。
+
+- **带 TTL 是必须的**：agent 会崩，锁不能等它释放
+- **过期即失效，不需要清理任务** —— 和其它派生数据一样，不存陈旧状态
+- 这是**协调信号**，不是权限门禁：它让冲突在**动手之前**暴露，而不是在
+  最贵的写入时刻。别人已认领时 `task claim` 报 `CLAIMED`（退出码 6），
+  **不覆盖** —— 要抢得先 release，或等它过期
+- `Area.owner_ids`（把 agent 按 Area 分区）是第一道防线，claim 是同区内的第二道
+
 ## 4.5 初始化之后怎么分发到每个人
 
 这一节是实测出来的（3 人 × 3 个 Area 走完整流程，见下），**不是推演**。

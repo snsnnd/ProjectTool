@@ -53,6 +53,30 @@ class RevisionConflict(ProjectToolError):
         super().__init__(message, details)
 
 
+class Claimed(ProjectToolError):
+    """task 已被他人认领（V1-C）。
+
+    和 `RevisionConflict` 分开是刻意的：rev 冲突是**事后**发现（写不进去），
+    而认领冲突是**事前**告知（动手前就知道该找谁）。agent 应该按前者重试，
+    按后者换任务 —— 混成一个码会让调用方分不清该重试还是该放弃。
+    """
+
+    code = "CLAIMED"
+    exit_code = 6
+
+    def __init__(
+        self,
+        message: str,
+        member_id: str | None = None,
+        expires_at: str | None = None,
+        task_id: str | None = None,
+    ):
+        super().__init__(
+            message,
+            {"member_id": member_id, "expires_at": expires_at, "task_id": task_id},
+        )
+
+
 class DependencyCycle(ProjectToolError):
     code = "DEPENDENCY_CYCLE"
     exit_code = 3

@@ -451,3 +451,9 @@ def _local_uncommitted(ctx, bindable, prefix: str) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+# ==================================================================== 认领（claim）
+#
+# 判定逻辑在 `project_tool.domain.task`（领域层）——`project_graph` 和 `queries`
+# 互相依赖，认领判定被两边都要用，放应用层必然成环。这里只做转发。

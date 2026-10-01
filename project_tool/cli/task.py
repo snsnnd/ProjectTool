@@ -11,6 +11,7 @@ from project_tool.cli.render import (
     porcelain_tasks,
     render_artifact_list,
     render_events,
+    render_task_interfaces,
     render_task_show,
     render_task_table,
     render_update_list,
@@ -74,6 +75,12 @@ def task_list(
     priority: Annotated[list[str] | None, typer.Option("--priority", "-p")] = None,
     parent: Annotated[str | None, typer.Option("--parent")] = None,
     include_archived: Annotated[bool, typer.Option("--all", help="Include archived tasks")] = False,
+    unclaimed: Annotated[
+        bool, typer.Option("--unclaimed", help="Only tasks nobody has claimed (expired counts as free)")
+    ] = False,
+    claimed_by: Annotated[
+        str | None, typer.Option("--claimed-by", help="Only tasks claimed by this member")
+    ] = None,
 ) -> None:
     """List tasks."""
     execute(
@@ -88,6 +95,8 @@ def task_list(
             "priority": priority,
             "parent": parent,
             "include_archived": include_archived,
+            "unclaimed": unclaimed,
+            "claimed_by": claimed_by,
         },
         render=render_task_table,
         porcelain_render=porcelain_tasks,
@@ -344,6 +353,75 @@ def task_move_area(
         "task.move_area",
         {"task_id": task_id, "area_id": area, "expected_rev": expected_rev},
         render=lambda result: console.print(f"{result['id']} area: {sid(result.get('area_id'))}"),
+    )
+
+
+@task_app.command("claim")
+def task_claim(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    agent: Annotated[
+        str | None, typer.Option("--agent", help="Who claims; default = current actor")
+    ] = None,
+    ttl: Annotated[
+        int, typer.Option("--ttl", help="Minutes until the claim expires (max 480)")
+    ] = 30,
+    note: Annotated[str, typer.Option("--note", help="What you're about to do")] = "",
+) -> None:
+    """Claim a task so others (and other agents) can see you're on it.
+
+    Not a lock and not a permission gate: it makes the conflict visible *before*
+    the expensive moment. Expiry is mandatory because agents crash.
+    """
+    execute(
+        ctx,
+        "task.claim",
+        {"task_id": task_id, "member": agent, "ttl_minutes": ttl, "note": note},
+        render=lambda r: console.print(
+            f"{r['id']} claimed by {r['claim']['member_id']} until {r['claim']['expires_at']}"
+        ),
+    )
+
+
+@task_app.command("release")
+def task_release(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    agent: Annotated[
+        str | None, typer.Option("--agent", help="Only allow releasing this person's claim")
+    ] = None,
+) -> None:
+    """Release a claim. Expiry makes this optional; repeating it is not an error."""
+    execute(
+        ctx,
+        "task.release",
+        {"task_id": task_id, "member": agent},
+        render=lambda r: console.print(
+            f"{r['id']} released"
+            if r.get("claim") is None
+            else f"{r['id']} still claimed by {r['claim']['member_id']}"
+        ),
+    )
+
+
+@task_app.command("related-interfaces")
+def task_related_interfaces(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument()],
+    no_area: Annotated[
+        bool, typer.Option("--no-area", help="Only explicitly linked interfaces")
+    ] = False,
+) -> None:
+    """Show interface contracts relevant to this task.
+
+    Agent 没有隐性知识——它不知道某个接口什么时候能改、什么算破坏性变更。
+    动手之前先看这个。
+    """
+    execute(
+        ctx,
+        "task.related_interfaces",
+        {"task_id": task_id, "area_scope": not no_area},
+        render=render_task_interfaces,
     )
 
 

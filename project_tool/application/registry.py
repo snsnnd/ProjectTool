@@ -124,6 +124,21 @@ def build_registry(service) -> dict[str, MethodSpec]:
             "task",
             "related artifacts",
         ),
+        MethodSpec(
+            "task.claim",
+            tasks.task_claim,
+            True,
+            "task",
+            "claim a task (coordination signal, TTL-bound)",
+        ),
+        MethodSpec("task.release", tasks.task_release, True, "task", "release a claim"),
+        MethodSpec(
+            "task.related_interfaces",
+            tasks.task_related_interfaces,
+            False,
+            "task",
+            "interface contracts relevant to a task",
+        ),
         MethodSpec("task.history", tasks.task_history, False, "task", "task event history"),
         # member
         MethodSpec("member.add", members.member_add, True, "member", "add member"),

@@ -22,7 +22,7 @@ from project_tool.domain.errors import (
 )
 from project_tool.domain.hashing import compute_rev
 from project_tool.domain.ids import CROCKFORD
-from project_tool.domain.task import Task
+from project_tool.domain.task import Task, claim_view
 from project_tool.domain.timeutil import now_local, parse_datetime
 from project_tool.graph import dependency as dependency_graph
 from project_tool.integrations import filesystem
@@ -235,6 +235,10 @@ class ServiceContext:
         record = task.model_dump(mode="json")
         record["computed_blocked"] = blocked
         record["blocked_by"] = blockers
+        # 认领是否有效是**派生**的（比时间戳），所以读视图统一在这里算好，
+        # 调用方不需要自己判断过期 —— 到处各自判断迟早会漏。
+        record["claim"] = claim_view(task.claim)
+        record["claimed"] = record["claim"] is not None
         return record
 
     def rebuild_labels(self) -> None:

@@ -209,6 +209,7 @@ def render_task_table(rows: list[dict[str, Any]]) -> None:
     table.add_column("W", no_wrap=True, min_width=1)
     table.add_column("Title", overflow="ellipsis", no_wrap=True, ratio=1)
     table.add_column("Owners", style="dim", no_wrap=True, min_width=13)
+    table.add_column("Claim", style="dim", no_wrap=True, min_width=6)
     for task in rows:
         status_text = task["status"]
         if task.get("computed_blocked"):
@@ -220,6 +221,7 @@ def render_task_table(rows: list[dict[str, Any]]) -> None:
             str(task.get("weight", 1)),
             task["title"],
             ",".join(sid(owner) for owner in task.get("owner_ids") or []) or "-",
+            _claim_cell(task),
         )
     console.print(table)
     blocked = [task for task in rows if task.get("computed_blocked")]
@@ -433,6 +435,36 @@ def render_interface_check(result: dict[str, Any]) -> None:
     )
 
 
+REASON_LABEL = {
+    "linked": "[green]linked[/green]",
+    "same_area": "[cyan]same area[/cyan]",
+    "mentioned": "[dim]mentioned[/dim]",
+}
+
+
+def render_task_interfaces(result: dict[str, Any]) -> None:
+    rows = result.get("interfaces") or []
+    if not rows:
+        console.print("[dim]no interface contracts relevant to this task[/dim]")
+        console.print(
+            "[dim]register one with: pjt interface init <name> --area <area>, "
+            "then link it: pjt artifact attach <artifact> --task <task>[/dim]"
+        )
+        return
+    for row in rows:
+        status = row.get("status") or "?"
+        label = REASON_LABEL.get(row.get("reason", ""), row.get("reason", ""))
+        console.print(
+            f"  {label}  {row.get('name')}  [dim]{status}[/dim]"
+            f"  [dim]{row.get('locator')}[/dim]"
+        )
+        if row.get("read_error"):
+            console.print(f"      [red]{row['read_error']}[/red]")
+        if row.get("consumers"):
+            console.print(f"      [dim]consumers: {', '.join(str(c) for c in row['consumers'])}[/dim]")
+    console.print(f"\n  [dim]{result.get('note', '')}[/dim]")
+
+
 def render_area_activity(result: dict[str, Any]) -> None:
     """`pjt area activity`。
 
@@ -526,6 +558,15 @@ def render_area_matches(result: list[dict[str, Any]]) -> None:
         console.print(f"  {sid(match['id'])}  {match['name']}")
         for pattern in match.get("patterns") or []:
             console.print(f"    [dim]{pattern}[/dim]")
+
+
+def _claim_cell(task: dict[str, Any]) -> str:
+    """认领列。过期已经变成 None 了，所以这里只处理「有效」和「没有」两种。"""
+    claim = task.get("claim")
+    if not claim:
+        return "-"
+    expires = str(claim.get("expires_at") or "")[:16]
+    return f"[yellow]{sid(claim['member_id'])}[/{''}] [dim]{expires}[/dim]"
 
 
 def _owner_label(owners) -> str:

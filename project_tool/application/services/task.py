@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any, cast
 
 from project_tool.application.context import (
@@ -13,9 +14,10 @@ from project_tool.application.context import (
 )
 from project_tool.domain.artifact import Artifact
 from project_tool.domain.enums import DependencyRelation, Lifecycle, Priority, TaskStatus
-from project_tool.domain.errors import DependencyCycle, InvalidArgument, NotFound
+from project_tool.domain.errors import Claimed, DependencyCycle, InvalidArgument, NotFound
 from project_tool.domain.ids import new_id
-from project_tool.domain.task import Dependency, Task
+from project_tool.domain.interfaces import parse_front_matter
+from project_tool.domain.task import Claim, Dependency, Task, claim_view
 from project_tool.domain.timeutil import now_local
 from project_tool.domain.update import Update
 from project_tool.domain.validation import (
@@ -26,6 +28,10 @@ from project_tool.domain.validation import (
 )
 from project_tool.graph import dependency as dependency_graph
 from project_tool.graph import project_graph
+
+#: 认领 TTL 上限（分钟）。上限存在是为了防止有人 claim 一个 task 然后
+#: 把它占住一整年 —— 那不是协调，是软锁。
+MAX_CLAIM_MINUTES = 8 * 60
 
 
 class TaskService:
@@ -88,7 +94,15 @@ class TaskService:
         parent=None,
         include_archived=False,
         include_deleted=False,
+        unclaimed: bool = False,
+        claimed_by=None,
     ) -> list[dict[str, Any]]:
+        """列任务。
+
+        `unclaimed=True` 只返回**没有有效认领**的任务（过期的不算占用）——
+        这是「给我一件没人做的事」的查询，agent 拿它当待办入口。
+        `claimed_by` 配合 `unclaimed` 一起用没有意义，单独传则只看某人的认领。
+        """
         wanted_status = {enum_value(TaskStatus, item, "status").value for item in as_list(status)}
         wanted_priority = {enum_value(Priority, item, "priority").value for item in as_list(priority)}
         owner_id = self.ctx.member_id(owner) if owner else None
@@ -113,6 +127,15 @@ class TaskService:
             if area_id and task.area_id != area_id:
                 continue
             if parent_id and task.parent_task_id != parent_id:
+                continue
+            # 认领过滤放在最后：它是**派生**判定（比较时间戳），
+            # 过期的不算占用，所以不需要任何清理
+            active_claim = claim_view(task.claim)
+            if unclaimed and active_claim is not None:
+                continue
+            if claimed_by and (active_claim or {}).get("member_id") != self.ctx.member_id(
+                claimed_by
+            ):
                 continue
             if label and label not in task.labels:
                 continue
@@ -391,3 +414,173 @@ class TaskService:
         if weight < 1:
             raise InvalidArgument("weight must be >= 1")
         return weight
+
+    def task_related_interfaces(self, task_id, area_scope: bool = True) -> dict[str, Any]:
+        """和这个 task 相关的接口契约（**派生读，不建索引**）。
+
+        为什么需要：agent 没有隐性知识 —— 它不知道 `store.updateModel` 什么时候
+        能改、什么算破坏性变更。人靠记忆和口口相传，agent 只能读文档。
+        所以「这个 task 碰了哪些契约」必须在**动手之前**就摆在它面前。
+
+        三条来源，**可信度递减**：
+
+        1. **显式关联**：Artifact（interface）的 `related_task_ids` 含本 task
+           —— `pjt artifact attach --task`，最准确，是人明确说的
+        2. **同 Area**：接口 front-matter 的 `area` == task 的 area
+           —— 结构上的可能相关，不一定真相关，所以标 `reason="same_area"`
+        3. **正文提及**：接口名出现在 task 标题/描述里
+           —— 弱信号，只用来提示，标 `reason="mentioned"`
+
+        每条都带 `reason`，让调用方自己决定信多少。**工具不合并、不排序成
+        「最相关」** —— 那等于替人做判断。
+        """
+        full_id = self.ctx.resolve_ref("task", task_id, allow_deleted=True)
+        task = self.ctx.load("task", full_id)
+        haystack = f"{task.title} {task.description}".lower()
+
+        rows: list[dict[str, Any]] = []
+        for record in self.ctx.store.list_raw("artifact", include_deleted=False):
+            metadata = record.get("metadata") or {}
+            if metadata.get("interface") is not True:
+                continue
+            if record.get("lifecycle") == Lifecycle.DELETED.value:
+                continue
+            entry = self._interface_row(record)
+            if entry is None:
+                continue
+            if full_id in (record.get("related_task_ids") or []):
+                entry["reason"] = "linked"
+                rows.append(entry)
+            elif area_scope and task.area_id and entry.get("area_id") == task.area_id:
+                entry["reason"] = "same_area"
+                rows.append(entry)
+            elif entry.get("name") and str(entry["name"]).lower() in haystack:
+                entry["reason"] = "mentioned"
+                rows.append(entry)
+
+        # 显式关联排前面，其次同 Area，最后正文提及
+        order = {"linked": 0, "same_area": 1, "mentioned": 2}
+        rows.sort(key=lambda item: (order.get(item["reason"], 9), str(item.get("name") or "")))
+        return {
+            "task_id": full_id,
+            "count": len(rows),
+            "interfaces": rows,
+            "note": (
+                "reason 字段标明这条为什么被带出来：linked=显式关联，"
+                "same_area=同 Area，mentioned=正文提及。工具不替你判断相关性。"
+            ),
+        }
+
+    def _interface_row(self, record: dict[str, Any]) -> dict[str, Any] | None:
+        """从 Artifact + 它的 markdown 里抽出接口摘要（读不到就返回 None）。"""
+        from pathlib import Path
+
+        locator = str(record.get("locator") or "")
+        row: dict[str, Any] = {
+            "artifact_id": record.get("id"),
+            "name": record.get("name"),
+            "locator": locator,
+            "area_id": (record.get("related_area_ids") or [None])[0],
+            "status": None,
+            "consumers": [],
+            "readable": False,
+        }
+        path = self.ctx.paths.root / locator
+        if not path.is_file():
+            row["read_error"] = "document not found"
+            return row
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            row["read_error"] = str(exc)
+            return row
+        data, _, error = parse_front_matter(text)
+        if error is not None:
+            row["read_error"] = error
+            return row
+        row["readable"] = True
+        row["name"] = data.get("name") or row["name"]
+        row["status"] = data.get("status")
+        # ⚠ front-matter 的 `area` 是**名字**，而 `area_id` 必须保持 id ——
+        # 上面按 area 匹配时要拿它和 task.area_id 比。混用会导致永远匹配不上。
+        row["area"] = data.get("area")
+        row["consumers"] = data.get("consumers") or []
+        return row
+
+    # ------------------------------------------------------------- 认领
+
+    def task_claim(
+        self, task_id, member=None, ttl_minutes: int = 30, note: str = ""
+    ) -> dict[str, Any]:
+        """认领一个 task（协调信号，不是锁，也不是权限门禁）。
+
+        目的是把「有人在动这个」提前暴露出来。写入那一刻才发现冲突太晚了 ——
+        人类撞了重试几秒，agent 撞了意味着整个任务已经做完、全部作废。
+
+        语义：
+        - 同一个人重复 claim = 续期（agent 干活可能超过 TTL）
+        - 别人已认领 = `CLAIMED`，**不覆盖**。要抢得先 release，或等它过期
+        - **TTL 必填且有上限**：agent 会崩，不能让它永久占住
+        """
+        task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev=None)
+        member_id = self.ctx.member_id(member) if member else self.ctx.actor_id
+        if not member_id:
+            raise InvalidArgument(
+                "cannot claim: no actor. run 'pjt member use <handle>' or set PJT_ACTOR"
+            )
+        minutes = max(1, min(int(ttl_minutes), MAX_CLAIM_MINUTES))
+        now = now_local()
+
+        current = claim_view(task.claim, now)
+        if current is not None and current["member_id"] != member_id:
+            raise Claimed(
+                f"task {task.id} is claimed by {current['member_id']} until "
+                f"{current['expires_at']}; release it or wait for expiry",
+                member_id=current["member_id"],
+                expires_at=current["expires_at"],
+                task_id=task.id,
+            )
+        expires = now + timedelta(minutes=minutes)
+        # 续期保留原 claimed_at，这样「从什么时候开始有人在动」不会因为续期被抹掉
+        renewed = current is not None
+        claimed_at = datetime.fromisoformat(current["claimed_at"]) if current else now
+        task.claim = Claim(
+            member_id=member_id,
+            claimed_at=claimed_at,
+            expires_at=expires,
+            note=optional_text(note, "note"),
+        )
+        self.ctx.save(
+            task,
+            base,
+            "task.claimed",
+            {
+                "member_id": member_id,
+                "expires_at": expires.isoformat(),
+                "ttl_minutes": minutes,
+                "renewed": renewed,
+            },
+        )
+        # 返回 task_view 而不是 save 的原始 record：认领的有效性是**派生**的，
+        # 调用方不该拿到一个「看起来还没生效」的 claim 字段
+        return self.ctx.task_view(task)
+
+    def task_release(self, task_id, member=None) -> dict[str, Any]:
+        """放弃认领。只有认领者本人（或未指定 member 时当前 actor）能放。"""
+        task = self.ctx.load("task", task_id)
+        base = self.ctx.require_expected_rev("task", task, expected_rev=None)
+        current = claim_view(task.claim)
+        if current is None:
+            # 过期 = 本来就没有，不是错误：重复 release 是正常操作
+            return self.ctx.task_view(task)
+        if member is not None and self.ctx.member_id(member) != current["member_id"]:
+            holder = self.ctx.store.get_raw("member", current["member_id"]) or {}
+            raise InvalidArgument(
+                f"task {task.id} is claimed by "
+                f"{holder.get('handle') or current['member_id']}, not by {member!r}"
+            )
+        previous = current["member_id"]
+        task.claim = None
+        self.ctx.save(task, base, "task.released", {"member_id": previous})
+        return self.ctx.task_view(task)

@@ -224,10 +224,11 @@ link.add  link.get  link.list  link.update  link.remove  link.resolve  link.stat
 | `NOT_FOUND` | 对象/项目不存在 | 4 |
 | `ALREADY_EXISTS` | handle 等唯一约束冲突 | 3 |
 | `CONFLICT` / `REVISION_CONFLICT` | 并发修改、expected_rev 不符 | 5 |
+| `CLAIMED` | task 已被他人认领。**事前**告知（动手前），而 `REVISION_CONFLICT` 是**事后**（写不进去）——agent 该按前者换任务、按后者重试，所以分成两个码 | 6 |
 | `DEPENDENCY_CYCLE` | task dependency 成环 | 3 |
 | `HIERARCHY_CYCLE` | goal/task parent 或 decision supersede 成环 | 3 |
 | `BROKEN_LINK` | 引用悬空 | 3 |
-| `PERMISSION_DENIED` / `AUTH_REQUIRED` | 权限（V2） | 6 |
+| `PERMISSION_DENIED` / `AUTH_REQUIRED` | 权限（V2，占用同一个码位） | 6 |
 | `REMOTE_UNAVAILABLE` | 远程不可达（V2） | 7 |
 | `SYNC_CONFLICT` | 同步冲突（V2） | 8 |
 | `SCHEMA_MIGRATION_REQUIRED` | 项目 schema 落后于工具；读允许，**写被拦**，先 `pjt migrate` | 9 |
@@ -262,7 +263,7 @@ pjt goal add|list|show|edit|achieve|drop|archive|restore   （edit 支持 --expe
 pjt milestone add|list|show|edit|activate|close|cancel|progress
 pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
-          |archive|restore|delete|history|set-parent
+          |archive|restore|delete|history|set-parent|claim|release|related-interfaces
 pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
           |tasks|set-parent|set-owner|match-path|history|activity
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history   （attach/detach 支持 --area）

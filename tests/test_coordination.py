@@ -603,3 +603,97 @@ def test_key_values_keeps_equals_signs_inside_the_value():
         key_values(["nokey"])
     with pytest.raises(InvalidArgument):
         key_values(["=value"])
+
+
+# ================================================================== task.related_interfaces
+
+
+def test_related_interfaces_finds_explicitly_linked(svc, root):
+    svc.call("area.create", {"name": "core"})
+    artifact = svc.call(
+        "interface.init", {"name": "store.updateModel", "area": "core", "consumers": ["ui"]}
+    )
+    task_id = svc.call("task.create", {"title": "改点东西", "area_id": None})["id"]
+    svc.call("artifact.attach", {"artifact_id": artifact["id"], "task": task_id})
+
+    result = svc.call("task.related_interfaces", {"task_id": task_id})
+    assert result["count"] == 1
+    entry = result["interfaces"][0]
+    assert entry["reason"] == "linked"
+    assert entry["name"] == "store.updateModel"
+    assert entry["consumers"] == ["ui"]
+
+
+def test_related_interfaces_finds_the_same_area(svc, root):
+    area = svc.call("area.create", {"name": "core"})
+    svc.call(
+        "interface.init",
+        {"name": "store.updateModel", "area": "core", "consumers": ["ui"]},
+    )
+    task_id = svc.call("task.create", {"title": "无关标题", "area_id": area["id"]})["id"]
+    result = svc.call("task.related_interfaces", {"task_id": task_id})
+    assert [e["reason"] for e in result["interfaces"]] == ["same_area"]
+
+
+def test_related_interfaces_area_scope_can_be_disabled(svc, root):
+    area = svc.call("area.create", {"name": "core"})
+    svc.call("interface.init", {"name": "store.updateModel", "area": "core"})
+    task_id = svc.call("task.create", {"title": "无关", "area_id": area["id"]})["id"]
+    assert svc.call("task.related_interfaces", {"task_id": task_id, "area_scope": False})["count"] == 0
+
+
+def test_related_interfaces_finds_mentions_in_the_title(svc, root):
+    svc.call("area.create", {"name": "core"})
+    svc.call("interface.init", {"name": "store.updateModel", "area": "core"})
+    task_id = svc.call("task.create", {"title": "调整 store.updateModel 的签名"})["id"]
+    result = svc.call("task.related_interfaces", {"task_id": task_id})
+    assert [e["reason"] for e in result["interfaces"]] == ["mentioned"]
+
+
+def test_related_interfaces_orders_linked_before_same_area(svc, root):
+    """可信度递减：显式关联 > 同 Area > 正文提及。"""
+    area = svc.call("area.create", {"name": "core"})
+    linked = svc.call("interface.init", {"name": "store.updateModel", "area": "core"})
+    svc.call("interface.init", {"name": "core.internal", "area": "core"})
+    task_id = svc.call("task.create", {"title": "同时提到 core.internal", "area_id": area["id"]})["id"]
+    svc.call("artifact.attach", {"artifact_id": linked["id"], "task": task_id})
+    result = svc.call("task.related_interfaces", {"task_id": task_id})
+    reasons = [e["reason"] for e in result["interfaces"]]
+    assert reasons[0] == "linked"
+    assert reasons.index("linked") < reasons.index("same_area")
+
+
+def test_related_interfaces_area_id_is_an_id_not_a_name(svc, root):
+    """回归：front-matter 的 `area` 是**名字**，拿它和 task.area_id 比会永远不匹配。"""
+    area = svc.call("area.create", {"name": "core"})
+    svc.call("interface.init", {"name": "store.updateModel", "area": "core"})
+    task_id = svc.call("task.create", {"title": "无关", "area_id": area["id"]})["id"]
+    row = svc.call("task.related_interfaces", {"task_id": task_id})["interfaces"][0]
+    assert row["area_id"] == area["id"]
+    assert row["area"] == "core"
+
+
+def test_related_interfaces_reports_an_unreadable_document(svc, root):
+    area = svc.call("area.create", {"name": "core"})
+    artifact = svc.call("interface.init", {"name": "gone.api", "area": "core"})
+    (root / artifact["locator"]).unlink()
+    task_id = svc.call("task.create", {"title": "无关", "area_id": area["id"]})["id"]
+    row = svc.call("task.related_interfaces", {"task_id": task_id})["interfaces"][0]
+    assert row["readable"] is False
+    assert "not found" in row["read_error"]
+
+
+def test_cli_related_interfaces(root, svc):
+    invoke(["-C", str(root), "area", "add", "core"])
+    invoke(
+        ["-C", str(root), "interface", "init", "store.updateModel",
+         "--area", "core", "--consumer", "ui"]
+    )
+    task = json.loads(
+        invoke(["--json", "-C", str(root), "task", "add", "无关", "--area", "core"]).output
+    )["result"]["id"]
+    result = invoke(["--json", "-C", str(root), "task", "related-interfaces", task])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)["result"]
+    assert payload["count"] == 1
+    assert payload["interfaces"][0]["name"] == "store.updateModel"

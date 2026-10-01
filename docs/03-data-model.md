@@ -307,6 +307,30 @@ git log --name-only --since=N.days.ago
 - 没有 `path_patterns` 的 Area 报 `bound=false`：代码根本没法映射到它，
   这不是错误，是提醒你补 pattern。
 
+### 4.7b'' Task 认领（V1-C：协调信号，不是锁）
+
+```json
+"claim": {
+  "member_id": "MBR-01K8H61N2B",
+  "claimed_at": "2026-10-01T17:25:21+08:00",
+  "expires_at": "2026-10-01T17:55:21+08:00",
+  "note": "在改 store"
+}
+```
+
+- **不是锁，也不是权限门禁**。目的是让「有人在动这个 task」在**动手之前**可见，
+  而不是等到写入那一刻撞 `REVISION_CONFLICT`
+- 人类撞 rev 冲突重试几秒；**agent 撞了意味着整个任务已经做完**（读了代码、
+  改了工作树、调了工具），全部作废。而 agent 不会像人一样先问一句"有人在改吗"
+- **`expires_at` 是必须的**：agent 会崩，锁不能等它释放。TTL 上限 8 小时
+  （`MAX_CLAIM_MINUTES`），防止「认领完占住一整年」——那不是协调，是软锁
+- **过期即失效，不需要任何清理任务**：判定是**派生**的（比较时间戳），
+  和 `state.json` / `labels.json` 一样不存在陈旧状态
+- 别人已认领时 `task.claim` 报 `CLAIMED`（退出码 6），**不覆盖**。
+  同一个人重复 claim = 续期，且保留原 `claimed_at`
+- 查询：`pjt task list --unclaimed`（给我一件没人做的事）、
+  `--claimed-by <handle>`；`task.get` / `task.list` 带 `claim` + `claimed`
+
 ### 4.7c 接口契约（V1-C：固定模板的 markdown）
 
 **不是一等对象。** 这是刻意的设计选择，值得说明理由：
