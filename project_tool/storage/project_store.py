@@ -27,7 +27,24 @@ from project_tool.storage.local_state import LocalState, load_local, save_local
 from project_tool.version import SCHEMA_VERSION
 
 PJT_DIRNAME = ".pjt"
-GITIGNORE_LINES = (".pjt/local/", ".pjt/transactions/")
+# 分组写入，便于给不同语义的文件各自加注释。
+# 派生缓存这一组是 V1-C 加的：`state/state.json` 每次事务都重写，
+# `refs/labels.json` 由重扫 task 生成——两者都是可重建的派生数据，
+# 提交进 Git 会让**每一次**多人合并都冲突（探针实测 9 个场景里 8 个）。
+#
+# 刻意写具体文件而不是整个 `refs/` 目录：将来 refs/ 里可能放**规范**数据，
+# 一旦整个目录被忽略就会静默丢失。
+GITIGNORE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("# Project Tool local state", (".pjt/local/", ".pjt/transactions/")),
+    (
+        "# Project Tool derived caches (rebuilt on demand; never commit these)",
+        (".pjt/state/", ".pjt/refs/labels.json"),
+    ),
+)
+GITIGNORE_LINES = tuple(line for _, lines in GITIGNORE_GROUPS for line in lines)
+
+# 派生缓存的相对路径——doctor 用它查「有没有被提交进 Git」
+DERIVED_CACHE_PATHS = (".pjt/state/state.json", ".pjt/refs/labels.json")
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -269,16 +286,33 @@ def _read_config(paths: ProjectPaths) -> dict[str, Any]:
         raise ProjectCorrupted(f"cannot parse config.toml: {exc}") from exc
 
 
-def _append_gitignore(root: Path) -> None:
+def ensure_gitignore(root: Path) -> list[str]:
+    """把 Project Tool 需要的 ignore 规则补进项目根的 `.gitignore`（幂等）。
+
+    返回本次真正新增的行。老项目规则已在（V0/V0.1 写的 local/transactions）
+    时只补新增的那些，不会重复写注释块。
+    """
     gitignore = root / ".gitignore"
     existing = gitignore.read_text(encoding="utf-8") if gitignore.is_file() else ""
     lines = existing.splitlines()
-    missing = [line for line in GITIGNORE_LINES if line not in lines]
-    if not missing:
-        return
-    if existing and not existing.endswith("\n"):
-        existing += "\n"
-    if existing.strip():
-        existing += "\n"
-    existing += "# Project Tool local state\n" + "\n".join(missing) + "\n"
-    filesystem.atomic_write_text(gitignore, existing)
+    added: list[str] = []
+    for header, group in GITIGNORE_GROUPS:
+        missing = [line for line in group if line not in lines]
+        if not missing:
+            continue
+        if existing.strip():
+            if not existing.endswith("\n"):
+                existing += "\n"
+            existing += "\n"
+        if header not in lines:
+            existing += header + "\n"
+        existing += "\n".join(missing) + "\n"
+        lines.extend(missing)
+        added.extend(missing)
+    if added:
+        filesystem.atomic_write_text(gitignore, existing)
+    return added
+
+
+def _append_gitignore(root: Path) -> None:
+    ensure_gitignore(root)

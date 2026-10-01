@@ -16,8 +16,10 @@ from project_tool.domain.errors import ProjectToolError
 from project_tool.domain.hashing import verify_rev
 from project_tool.domain.ids import COLLECTION_BY_TYPE, PREFIX_BY_TYPE
 from project_tool.graph.dependency import detect_cycles
+from project_tool.integrations.git import tracked_files
 from project_tool.storage.local_state import lock_is_stale, process_alive, read_lock
 from project_tool.storage.object_store import MODEL_BY_TYPE
+from project_tool.storage.project_store import DERIVED_CACHE_PATHS
 from project_tool.storage.recovery import (
     STATUS_INVALID,
     scan_transactions,
@@ -484,6 +486,27 @@ def run_doctor(ctx) -> dict[str, Any]:
     else:
         add("state", "ok", "derived state present")
 
+    # 派生缓存被提交进 Git -> 多人合并时几乎每次都冲突（V1-C 探针实测
+    # 9 个真实场景 8 个因此冲突；排除后 8/9 干净，剩下的本来就该冲突）。
+    #
+    # 这里判 **error** 而不是 warning 是刻意的：`.gitignore` 规则是静默约定，
+    # 半年后有人 `git add -f` 一下就悄悄回归，没人会收到信号。把它变成受检
+    # 不变量，回退立刻有人看得见。
+    #
+    # 只报告、绝代劳：修好它需要 `git rm --cached`，那是 Git 写操作，
+    # 而本项目的 Git 适配器是只读的（AGENTS.md §11）。
+    tracked = _tracked_derived_caches(ctx)
+    if tracked:
+        add(
+            "derived.git_tracked",
+            "error",
+            f"{len(tracked)} derived cache file(s) are tracked by git; committing them makes "
+            "every concurrent merge conflict. Run: git rm --cached " + " ".join(tracked),
+            details={"tracked": tracked},
+        )
+    else:
+        add("derived.git_tracked", "ok", "derived caches are not tracked by git")
+
     return {
         "ok": errors == 0,
         "checks": checks,
@@ -495,6 +518,27 @@ def run_doctor(ctx) -> dict[str, Any]:
             "repairable": repairable_count,
         },
     }
+
+
+def _tracked_derived_caches(ctx) -> list[str]:
+    """`.pjt` 派生缓存里被 git 跟踪的文件（相对项目根）。
+
+    git 不可用 / 不在仓库内时返回空列表——非 Git 项目同样要能跑 doctor，
+    「查不到」不能当成「有问题」。
+    """
+    try:
+        found = tracked_files(ctx.paths.root, *DERIVED_CACHE_PATHS)
+    except Exception:  # noqa: BLE001 - git 状态永远不该让 doctor 失败
+        return []
+    if not found:
+        return []
+    # tracked_files 给出的是相对 **git root** 的路径；换算成相对项目根，
+    # 报告里给出的 git rm --cached 命令才能直接用（项目 root 可能不是 git root）。
+    prefix = f"{ctx.paths.root.name}/"
+    out = []
+    for path in sorted(found):
+        out.append(path[len(prefix):] if path.startswith(prefix) else path)
+    return out
 
 
 def check_locator_like(pattern: str) -> str:

@@ -1,4 +1,4 @@
-workdir: /tmp/pjt-v1b-efw-2qys_nb5
+workdir: /tmp/pjt-v1b-efw-_sie46zx
 efw:     /mnt/d/framework/new/efw
 ===== 1. REAL EFW: read-only Git awareness =====
 
@@ -25,7 +25,7 @@ efw:     /mnt/d/framework/new/efw
     modified   docs/03-runtime.md
     modified   docs/04-debug-and-api.md
     modified   docs/05-ui-style.md
-  .pjt 文件数 : 68  {'untracked': 68}
+  .pjt 文件数 : 66  {'untracked': 66}
   未绑定 Area : []
   => 真实 EFW 还没有 Area（V1-A 只在临时副本建过），所以 candidate_areas 全空
   => 同仓库其它目录的改动（framework/ 根目录等）没有混进来，这就是 subdir 过滤的作用
@@ -41,8 +41,8 @@ efw:     /mnt/d/framework/new/efw
   => 三个值与本轮开始前一致（见 v1a-evidence/00-efw-pollution-check.txt）
 
 ===== 2. TEMP COPY: Area 目录绑定 + commit 关联 =====
-  copy          : /tmp/pjt-v1b-efw-2qys_nb5/framework/new/efw
-  git work_tree : /tmp/pjt-v1b-efw-2qys_nb5/framework
+  copy          : /tmp/pjt-v1b-efw-_sie46zx/framework/new/efw
+  git work_tree : /tmp/pjt-v1b-efw-_sie46zx/framework
   subdir        : new/efw
 
 --- 2.1 给 Area 绑 path_patterns（V1-B 新能力，可选） ---
@@ -66,25 +66,25 @@ efw:     /mnt/d/framework/new/efw
 
 --- 2.4 commit trailer -> 任务关联（约定：PJT-Task: TSK-…） ---
   target task: TSK-01M3R9P6  serial/tcp 回环集成测试（socat/pty）
-  commit: d4c38b3658ff
-  git log --task -> [('d4c38b36', ['TSK-01M3R9P687D6CQME4B9531SDMP'])]
+  commit: 0f1608b9d6fc
+  git log --task -> [('0f1608b9', ['TSK-01M3R9P687D6CQME4B9531SDMP'])]
 
 --- 2.5 git.link-commit -> git_commit Artifact（只写 .pjt） ---
   created   : True
-  artifact  : ART-01M3SQ1Y  kind=git_commit  locator=d4c38b3658ff
+  artifact  : ART-01M3TMS3  kind=git_commit  locator=0f1608b9d6fc
   tasks     : ['TSK-01M3R9P687D6CQME4B9531SDMP']
   幂等重跑  : created=False  same_artifact=True
   仓库 HEAD 不变 : True
   仓库 reflog 不变: True
 
 --- 2.6 task.related_artifacts 现在含 commit 引用 ---
-    git_commit   d4c38b3658ff     add serial/tcp loopback coverage
+    git_commit   0f1608b9d6fc     add serial/tcp loopback coverage
 
 --- 2.7 git_commit artifact 的 verify（git adapter 已启用） ---
-    ok       d4c38b3658ff  resolved to d4c38b3658ff in /tmp/pjt-v1b-efw-2qys_nb5/framework
+    ok       0f1608b9d6fc  resolved to 0f1608b9d6fc in /tmp/pjt-v1b-efw-_sie46zx/framework
 
 --- 2.8 事件 ---
-    git.commit_linked    {"author": "V1B Dogfood", "created": true, "sha": "d4c38b3658fff6fa3ed61753838065fe84f29050", "short_sha": "d4c38b3658ff", "task_id": "TSK-01M3R9P687D6CQME4B9531SDMP"}
+    git.commit_linked    {"author": "V1B Dogfood", "created": true, "sha": "0f1608b9d6fc5b6e6d5bb351b2a735594f4779ea", "short_sha": "0f1608b9d6fc", "task_id": "TSK-01M3R9P687D6CQME4B9531SDMP"}
 
 --- 2.9 零写入证明：git 操作前后工程源码树 sha256 对比 ---
   TREE HASH: IDENTICAL  => git 操作只写了 .pjt/**，一个工程文件都没碰
@@ -94,4 +94,4 @@ efw:     /mnt/d/framework/new/efw
   WARNING  areas.path_patterns  1 area path pattern(s) match nothing (of 8 checked)
   ok=True objects=33 errors=0 warnings=1
 
-done. workdir kept: /tmp/pjt-v1b-efw-2qys_nb5
+done. workdir kept: /tmp/pjt-v1b-efw-_sie46zx

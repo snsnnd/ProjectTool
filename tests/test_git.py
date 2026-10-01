@@ -490,11 +490,15 @@ def test_read_only_subcommand_whitelist():
         WRITE_SUBCOMMANDS,
     )
 
-    assert READ_ONLY_SUBCOMMANDS == {"rev-parse", "status", "log", "show"}
+    # 白名单是**精确集合**断言，不是包含断言——加任何子命令都必须在这里
+    # 被显式看见。（V1-C 加了 ls-files：判断派生缓存有没有被提交，只读 index。）
+    assert READ_ONLY_SUBCOMMANDS == {"rev-parse", "status", "log", "show", "ls-files"}
     # 两个集合不能有交集——否则「只读」承诺有洞
     assert not (READ_ONLY_SUBCOMMANDS & WRITE_SUBCOMMANDS)
     for verb in ("add", "commit", "checkout", "merge", "reset", "clean", "push", "fetch"):
         assert verb in WRITE_SUBCOMMANDS
+    # ls-files 必须不在写集合里
+    assert "ls-files" not in WRITE_SUBCOMMANDS
 
 
 def test_git_repo_run_rejects_write_subcommands(svc, repo):

@@ -1,10 +1,10 @@
 {
-  "as_is": [
+  "before_derived_tracked": [
     {
       "scenario": "S0 both idle (control)",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S1 both create a different task",
@@ -12,7 +12,7 @@
       "conflicts": [
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S2 both post an update",
@@ -20,33 +20,35 @@
       "conflicts": [
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S3 both add a label",
       "clean": false,
       "conflicts": [
+        ".pjt/objects/tasks/TSK-01M3TNH1XGC4JPKT5HAFAV84XN.json",
         ".pjt/refs/labels.json",
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S4 both edit a different task",
       "clean": false,
       "conflicts": [
+        ".pjt/objects/tasks/TSK-01M3TNK31FK359G8FN2A8F5V65.json",
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S5 both edit the SAME task object",
       "clean": false,
       "conflicts": [
-        ".pjt/objects/tasks/TSK-01M3SVB74MP8CGJWZB5F9HB31X.json",
+        ".pjt/objects/tasks/TSK-01M3TNMP7BED46N9ZJHGHS6H5A.json",
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S6 A creates task / B posts update",
@@ -54,7 +56,7 @@
       "conflicts": [
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S7 both create a task in the same area",
@@ -62,73 +64,74 @@
       "conflicts": [
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     },
     {
       "scenario": "S8 both add a member",
       "clean": false,
       "conflicts": [
+        ".pjt/local/local.toml",
         ".pjt/state/state.json"
       ],
-      "ignore_derived": false
+      "derived_mode": "tracked"
     }
   ],
-  "derived_ignored": [
+  "after_derived_ignored": [
     {
       "scenario": "S0 both idle (control)",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S1 both create a different task",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S2 both post an update",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S3 both add a label",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S4 both edit a different task",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S5 both edit the SAME task object",
       "clean": false,
       "conflicts": [
-        ".pjt/objects/tasks/TSK-01M3SVHD13CRENH3RG293G3AWX.json"
+        ".pjt/objects/tasks/TSK-01M3TP2NBBCC7Z2HV3YRGEZNZD.json"
       ],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S6 A creates task / B posts update",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S7 both create a task in the same area",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     },
     {
       "scenario": "S8 both add a member",
       "clean": true,
       "conflicts": [],
-      "ignore_derived": true
+      "derived_mode": "ignored"
     }
   ]
 }

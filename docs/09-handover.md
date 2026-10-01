@@ -19,7 +19,7 @@ Git tracks code. Project Tool tracks the project.
 |---|---|
 | 版本 | `0.3.1`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
 | 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 |
-| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **413 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
+| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **430 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
 | 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（Area 映射、Artifact 关联、零污染树哈希） |
 | Service API | 显式 registry，**110 个 method**（CLI 全部触达），`system.capabilities` 可发现（`area/artifact/git = true`） |
 | 已实现 | **Git 感知（只读）**：`git.available` / `git.status` / `git.log` / `git.link_commit` + `Area.path_patterns` |
@@ -31,7 +31,7 @@ Git tracks code. Project Tool tracks the project.
 ```bash
 cd /path/to/ProjectTool
 uv sync
-uv run pytest                          # 413 passed
+uv run pytest                          # 430 passed
 uv run ruff check . && uv run mypy project_tool
 
 # 在临时目录体验完整流程（不要污染别人的真实项目）
@@ -62,7 +62,7 @@ ProjectTool/
 │   ├── graph/           # 依赖/层级/进度推导
 │   ├── integrations/    # filesystem（原子写、fsync）
 │   └── cli/             # Typer：main/common/render + 各域模块
-├── tests/               # 23 个测试文件，413 cases
+├── tests/               # 24 个测试文件，430 cases
 ├── docs/                # 01–09（09-handover = 本文件，09-v1a-design = 本轮设计记录）
 ├── dogfooding/          # EFW 真实项目验证报告 + 证据 + 可复现脚本
 ├── pyproject.toml       # uv；dev 依赖 pytest/ruff/mypy；ruff+mypy 配置
@@ -241,8 +241,13 @@ repair 入口:  pjt doctor --repair  ==  project.recover（先拿锁，再恢复
   如果「主 Area 说不清」的比例上升，应升到多 Area，而不是硬塞。
 - ⬜ **Area 名不唯一**。同 goal/milestone/task 的 title 一致；按名引用不唯一时报
   `INVALID_ARGUMENT` 并列出候选 ID。真实使用时「UI 只有一个」是自然约束，但没有强制。
-- ⬜ **没有多人 merge 辅助**（用户已确认放到最后做）。2 个并发写者 merge `.pjt` 冲突时
-  `doctor` 报 `PROJECT_CORRUPTED`（正确但需人工解）。
+- ⬜ **没有多人 merge 辅助**。并发规模按 **最多 20 人** 设计（不是早期文档写的 2 人）。
+  V1-C 已把**假冲突**清掉：派生缓存不再进版本控制，探针实测 1/9 → 8/9 场景可干净合并。
+  剩下的真冲突（两人改同一 task）由 `expected_rev` 在写入时拦，`doctor` 报
+  `PROJECT_CORRUPTED`（正确但需人工解）。
+- ⬜ **没有降低同对象并发的机制**。20 人盯同一批任务时，上面的真冲突会频繁出现。
+  候选：按 Area 划分所有权、`pjt task claim`。**这比做更聪明的自动合并更值得先做**——
+  无服务器架构下静默合并看不出对错，比冲突危险。
 
 **技术债**
 
@@ -271,13 +276,16 @@ V0 → V0.1 → V1-A → V1-A.1 → **V1-B（Git 感知层）全部完成**。
 
 **剩下的（未排期，按需要挑）**
 
-1. **多人 Git merge 辅助** — 这是「无 remote」这个决定的**唯一实质代价**。
-   2 个并发写者 merge `.pjt` 冲突时，`doctor` 会报 `PROJECT_CORRUPTED`（正确但需人工解）。
-   值得做的最小版本：`pjt doctor --resolve-merge` 之类的辅助，只读分析 + 给建议，不自动改。
+1. **降低同对象并发**（V1-C 当前主线）— 合并本身已经不是瓶颈：探针证明除
+   「两人改同一对象」外都能干净合并。20 人规模下真正会天天发生的是同对象冲突。
+   先做只读建议（如 `pjt task suggest-owner` 指出热点任务）还是直接做 claim，
+   取决于实际协作形态。**不要**做自动合并。
+2. **多人 Git merge 辅助** — 「无 remote」这个决定的实质代价，现在只剩真冲突这一类。
+   最小版本：`pjt doctor --resolve-merge` 之类，只读分析 + 给建议，不自动改。
    **不要**为了这个去做同步服务器。
-2. **Search / SQLite 索引** — 解决 §8 里「artifact 全量 file scan」和
+3. **Search / SQLite 索引** — 解决 §8 里「artifact 全量 file scan」和
    「上百任务时 list 变慢」。只读缓存，可重建，失败不得影响 canonical。
-3. **本地 Web** — `system.capabilities` 已有；FastAPI 薄封装（REST 映射见 docs/05 §7）→ React。
+4. **本地 Web** — `system.capabilities` 已有；FastAPI 薄封装（REST 映射见 docs/05 §7）→ React。
    注意：**只做本地**，不做远程服务。
 
 ## 10. 排障手册

@@ -24,7 +24,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
   **Artifact** / Link；Service 110 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
-  `link.map_local_path`/`unmap_local_path`）。
+  `link.map_local_path`/`unmap_local_path`）。V1-C 已起步：派生缓存治理。
 - 真实使用：EFW Studio（`framework@tmp/new` 的 `new/efw`）已完成两轮 dogfooding，零源码污染；
   数据保留在 `new/efw/.pjt`。报告：`dogfooding/report.md`（V0.1）、
   `dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（V1-A）。
@@ -60,6 +60,12 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     （`SCHEMA_MIGRATION_REQUIRED`）；`load_model`/`list_models` 强制 `verify_rev`，
     被外部篡改的对象读取即 `PROJECT_CORRUPTED`，不允许靠下一次写入洗白。
     例外只有 `doctor` 与 `resolve_actor`（数据已损坏时它们必须仍能工作）。
+
+14. **派生缓存不进版本控制**：`.pjt/state/state.json` 与 `.pjt/refs/labels.json`
+    是每次写入都会变的缓存，被提交就会让**每一次**并发合并都冲突
+    （V1-C 探针实测 1/9 vs 8/9）。`pjt init` 写好 ignore 规则、`pjt migrate`
+    给老项目幂等补齐、`pjt doctor` 把「被 git 跟踪」判为 **error**。
+    工具只报告，`git rm --cached` 由人执行（Git 适配器只读，§11）。
 
 ## 3. 常用命令
 
@@ -106,4 +112,5 @@ domain 模型/校验 → application/services/<域>.py → registry.py 注册
 - 测试只用 `tmp_path` + monkeypatch，禁止 sleep/网络/随机依赖；失败注入参考
   `tests/test_transaction_recovery.py`。
 - 公共行为变化必须同步 `docs/05`（接口）、`docs/03`（模型/校验）、`docs/08`（事件 payload）。
-- 下一阶段目标与待决模型问题见 `docs/09-handover.md` §8/§9（V1-B：先定 Area↔目录，再做 Git Adapter）。
+- 下一阶段目标与待决模型问题见 `docs/09-handover.md` §8/§9。
+  V1-C 当前主线：**降低同对象并发**（合并本身已不是瓶颈，见 §14 与 docs/06 的 V1-C）。

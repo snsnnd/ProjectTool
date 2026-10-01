@@ -10,6 +10,7 @@
 rev-parse    定位 git root / 判断是否在仓库内
 status       工作区改动（--porcelain，机器可读）
 log          提交历史（trailer / 路径过滤）
+ls-files     index 里被跟踪的文件（判断派生缓存有没有被提交；只读 index）
 ```
 
 **不做**：clone / fetch / add / commit / checkout / merge / reset / clean。
@@ -51,7 +52,7 @@ DEFAULT_TIMEOUT = 20.0
 
 # 唯一允许的 git 子命令。`GitRepo.run` 在运行时强制检查这个白名单——
 # 只靠 code review 盯着是不够的，将来有人顺手加一行 `repo.run("add", ...)` 必须失败。
-READ_ONLY_SUBCOMMANDS = frozenset({"rev-parse", "status", "log", "show"})
+READ_ONLY_SUBCOMMANDS = frozenset({"rev-parse", "status", "log", "show", "ls-files"})
 
 # 会改变仓库状态的动词（写进文档 + 测试断言用；运行时不检查，靠白名单保证）
 WRITE_SUBCOMMANDS = frozenset(
@@ -287,6 +288,29 @@ def detect(root: str | Path) -> GitRepo:
         git_dir = run(candidate, "rev-parse", "--absolute-git-dir").strip()
         return GitRepo(work_tree=Path(work_tree), git_dir=Path(git_dir), binary=binary)
     raise GitUnavailable(f"no git repository found at or above {start}")
+
+
+def tracked_files(root: str | Path, *paths: str) -> set[str]:
+    """index 里被跟踪的文件（相对 git root 的 posix 路径）。
+
+    用途：判断 `.pjt` 的**派生缓存**是不是被提交进了 Git。被提交的派生文件
+    在多人合并时每次都冲突——V1-C 探针实测 9 个真实场景里 8 个因此冲突，
+    排除后 8/9 干净，剩下的那个本来就该冲突。
+
+    只读 `.git/index`，不写任何东西；不在仓库内 / git 不可用时返回空集
+    （不可用是状态，不是错误——非 Git 项目同样要能跑 doctor）。
+    """
+    if not paths:
+        return set()
+    try:
+        repo = detect(root)
+    except GitUnavailable:
+        return set()
+    try:
+        raw = repo.run("ls-files", "-z", "--", *paths)
+    except GitUnavailable:
+        return set()
+    return {entry for entry in raw.split("\0") if entry}
 
 
 def availability(root: str | Path) -> dict[str, Any]:

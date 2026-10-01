@@ -59,7 +59,15 @@ class Bench:
     整体放在一个 mktemp 目录下，结束即删——绝不碰 new/efw 或 framework。
     """
 
-    def __init__(self, name: str = "MultiWriter", ignore_derived: bool = False):
+    def __init__(self, name: str = "MultiWriter", derived_mode: str = "ignored"):
+        """derived_mode:
+        "ignored"  —— 现状修复后的行为（`pjt init` 写好 .gitignore）
+        "tracked"  —— 修复前的行为：强制把派生缓存提交进 index
+
+        必须显式区分：`pjt init` 自己就会写 .gitignore，所以不刻意
+        `git add -f` 的话，「修复前」那一栏其实已经悄悄变成修复后了，
+        A/B 对比就成了自欺欺人。
+        """
         self.base = Path(tempfile.mkdtemp(prefix="pjt-mw-"))
         self.bare = self.base / "origin.git"
         self.origin = self.base / "origin"
@@ -68,18 +76,28 @@ class Bench:
         run(["git", "init", "-q", "--bare", "-b", "main", str(self.bare)], cwd=self.base)
         self.origin.mkdir()
         pjt(self.origin, "init", "--name", name)
-        if ignore_derived:
-            # 验证用：state/ 和 refs/ 都是可重建的派生缓存，不该进版本控制
-            gitignore = self.origin / ".gitignore"
-            with gitignore.open("a", encoding="utf-8") as handle:
-                handle.write(".pjt/state/\n.pjt/refs/\n")
         run(["git", "init", "-q", "-b", "main", "."], cwd=self.origin)
         run(["git", "config", "user.email", "origin@example.com"], cwd=self.origin)
         run(["git", "config", "user.name", "Origin"], cwd=self.origin)
         run(["git", "remote", "add", "origin", str(self.bare)], cwd=self.origin)
         run(["git", "add", "-A"], cwd=self.origin)
+        if derived_mode == "tracked":
+            # 修复前：派生缓存被提交（force 越过 .gitignore）
+            run(["git", "add", "-f", ".pjt"], cwd=self.origin)
         run(["git", "commit", "-qm", "init"], cwd=self.origin)
         run(["git", "push", "-q", "-u", "origin", "main"], cwd=self.origin)
+        if derived_mode == "tracked":
+            # init 之后派生缓存才被写出来，需要单独补一次提交
+            pjt(self.origin, "task", "add", "seed")
+            run(["git", "add", "-f", ".pjt"], cwd=self.origin)
+            run(["git", "commit", "-qm", "commit derived caches"], cwd=self.origin)
+            run(["git", "push", "-q", "origin", "main"], cwd=self.origin)
+            tracked = run(
+                ["git", "ls-files", ".pjt"], cwd=self.origin, check=False
+            ).stdout.split()
+            assert any("state.json" in path for path in tracked), (
+                "tracked 模式下派生缓存必须在 index 里，否则对比无效"
+            )
 
     def clone(self, name: str) -> Path:
         target = self.base / name
@@ -134,10 +152,10 @@ def scenario(
     name: str,
     act_a,
     act_b,
-    ignore_derived: bool = False,
+    derived_mode: str = "ignored",
     seed=None,
 ) -> dict:
-    bench = Bench(ignore_derived=ignore_derived)
+    bench = Bench(derived_mode=derived_mode)
     try:
         seeded = seed(bench.origin) if seed else None
         a = bench.clone("a")
@@ -155,7 +173,7 @@ def scenario(
             "scenario": name,
             "clean": clean,
             "conflicts": conflicts,
-            "ignore_derived": ignore_derived,
+            "derived_mode": derived_mode,
         }
     finally:
         bench.close()
@@ -248,12 +266,12 @@ def _scenarios() -> list[tuple[str, object, object]]:
     ]
 
 
-def _run_all(ignore_derived: bool) -> list[dict]:
+def _run_all(derived_mode: str) -> list[dict]:
     results = []
     for entry in _scenarios():
         name, act_a, act_b = entry[0], entry[1], entry[2]
         seed = entry[3] if len(entry) > 3 else None
-        results.append(scenario(name, act_a, act_b, ignore_derived=ignore_derived, seed=seed))
+        results.append(scenario(name, act_a, act_b, derived_mode=derived_mode, seed=seed))
     return results
 
 
@@ -274,16 +292,20 @@ def main() -> int:
     print("多人写者冲突探针 —— 纯 Git，全部在临时目录，绝不碰 new/efw")
     print("=" * 78)
 
-    before = _run_all(ignore_derived=False)
-    after = _run_all(ignore_derived=True)
+    before = _run_all(derived_mode="tracked")
+    after = _run_all(derived_mode="ignored")
 
-    _print(before, "A) 现状（state/ 和 refs/ 都提交进 Git）")
-    _print(after, "B) 把 state/ 和 refs/ 排除出版本控制后")
+    _print(before, "A) 修复前：派生缓存被提交进 Git")
+    _print(after, "B) 修复后：pjt init 的 .gitignore 排除派生缓存")
 
     out = REPO / "dogfooding" / "multiwriter-evidence"
     out.mkdir(exist_ok=True)
     (out / "conflict-probe.json").write_text(
-        json.dumps({"as_is": before, "derived_ignored": after}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {"before_derived_tracked": before, "after_derived_ignored": after},
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 

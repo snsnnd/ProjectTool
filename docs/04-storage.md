@@ -41,12 +41,39 @@
 `pjt init` 自动生成 `.gitignore`（追加，不覆盖已有内容）：
 
 ```gitignore
+# Project Tool local state
 .pjt/local/
 .pjt/transactions/
+
+# Project Tool derived caches (rebuilt on demand; never commit these)
+.pjt/state/
+.pjt/refs/labels.json
 ```
 
 **canonical = `project.json` + `objects/` + `events/`。**
 只要这三者存在，Project Tool 数据就能恢复；`refs/`、`state/`、SQLite、Web、Server 全部是派生物。
+
+### 派生缓存绝不能提交（V1-C）
+
+规则是**具体的两个文件**，不是整个 `refs/` 目录——将来 `refs/` 里可能放规范数据，
+整个目录被忽略就会静默丢数据。
+
+这不是洁癖，是多人协作的硬约束。V1-C 的合并探针
+（`dogfooding/scripts/multiwriter_probe.py`）实测 2 个写者的 9 个真实合并场景：
+
+| | 能干净合并 |
+|---|---|
+| 派生缓存被提交 | **1/9** |
+| 派生缓存被忽略 | **8/9** |
+
+`state/state.json` 每次事务都重写、`refs/labels.json` 由重扫 task 生成，
+被提交就意味着**每一次**并发合并都撞一次。剩下的 1/9（两人改同一个 task）
+是本来就该冲突的真语义冲突。
+
+因此 `pjt doctor` 把「派生缓存被 git 跟踪」判为 **error** 而不是 warning：
+`.gitignore` 是静默约定，半年后一次 `git add -f` 就会悄悄回归，没有信号。
+doctor **只报告不代劳**——修它需要 `git rm --cached`，那是 Git 写操作，
+而 Git 适配器是只读的（`AGENTS.md` §11）。
 
 ## 2. 磁盘格式
 
