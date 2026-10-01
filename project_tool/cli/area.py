@@ -11,6 +11,7 @@ from project_tool.cli.common import ExpectedRev, console, execute, sid
 from project_tool.cli.render import (
     render_area_list,
     render_area_matches,
+    render_area_owners,
     render_area_show,
     render_events,
     render_task_table,
@@ -217,3 +218,27 @@ def area_match_path(
 def area_history(ctx: typer.Context, area_id: Annotated[str, typer.Argument()]) -> None:
     """Show area event history."""
     execute(ctx, "area.history", {"area_id": area_id}, render=render_events)
+
+
+@area_app.command("set-owner")
+def area_set_owner(
+    ctx: typer.Context,
+    area_id: Annotated[str, typer.Argument()],
+    add: Annotated[
+        list[str] | None, typer.Option("--add", help="Member to add as owner (repeatable)")
+    ] = None,
+    remove: Annotated[
+        list[str] | None, typer.Option("--remove", help="Member to remove (repeatable)")
+    ] = None,
+    rev: ExpectedRev = None,
+) -> None:
+    """Add/remove the members responsible for an area.
+
+    One owner = a private block; several owners = a shared interface area.
+    """
+    execute(
+        ctx,
+        "area.set_owner",
+        {"area_id": area_id, "add": add, "remove": remove, "expected_rev": rev},
+        render=render_area_owners,
+    )

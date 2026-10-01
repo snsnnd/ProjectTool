@@ -55,13 +55,32 @@ def test_area_id_and_collection_are_registered():
     assert COLLECTION_BY_TYPE["area"] == "areas"
 
 
-def test_area_object_has_no_status_progress_due_or_owner(svc):
+def test_area_object_has_no_status_progress_due_or_weight(svc):
+    """Area 仍然禁止**时间维度**——这是 V1-A 拆开 Area / Milestone 的核心。
+
+    V1-A 当初把 owner 和这四个字段一起排除，理由是「加了时间维度就会退化成
+    第二个 Milestone」。这个理由对 status/progress/due_at/weight 成立，对
+    owner **不成立**：owner 是「人」的维度，和「哪个模块」「哪个阶段」正交。
+    V1-C 因此把 owner 拆出去单独立项，见下面那条测试。
+    """
     area = svc.call("area.create", {"name": "Core"})
-    for forbidden in ("status", "progress", "due_at", "owner", "owner_ids", "weight"):
-        assert forbidden not in area
+    for forbidden in ("status", "progress", "due_at", "weight"):
+        assert forbidden not in area, f"{forbidden} would turn Area into a second Milestone"
     assert area["lifecycle"] == Lifecycle.ACTIVE.value
     assert area["parent_area_id"] is None
     assert area["rev"].startswith("sha256:")
+
+
+def test_area_has_owner_ids_and_they_start_empty(svc):
+    """V1-C：owner 是**分区协作**的表达方式——每人负责一块 + 少量公共区。
+
+    复数是有意的：1 个 owner = 私有块，多个 = 公共接口区（比如 core 这种
+    被 UI/数据流/状态机共同依赖的模块）。不需要额外的 `shared: bool`。
+    """
+    area = svc.call("area.create", {"name": "Core"})
+    assert area["owner_ids"] == []
+    # 不是 `owner`（单数）——曾经 V1-A 禁掉的那个名字没有被复活
+    assert "owner" not in area
 
 
 def test_area_reference_resolution(svc, areas):

@@ -14,7 +14,8 @@ from project_tool.domain.artifact_locator import verify_locator
 from project_tool.domain.enums import ArtifactKind, Lifecycle
 from project_tool.domain.errors import ProjectToolError
 from project_tool.domain.hashing import verify_rev
-from project_tool.domain.ids import COLLECTION_BY_TYPE, PREFIX_BY_TYPE
+from project_tool.domain.ids import COLLECTION_BY_TYPE, PREFIX_BY_TYPE, short_id
+from project_tool.domain.member import KNOWN_ROLES
 from project_tool.graph.dependency import detect_cycles
 from project_tool.integrations.git import tracked_files
 from project_tool.storage.local_state import lock_is_stale, process_alive, read_lock
@@ -485,6 +486,60 @@ def run_doctor(ctx) -> dict[str, Any]:
         add("state", "warning", "state/state.json missing (derived)")
     else:
         add("state", "ok", "derived state present")
+
+    # ------------------------------------------------------------- 归属与角色
+    # Area.owner_ids 指向不存在的 member = 数据损坏（不是「还没分配」）。
+    # 「还没分配」是空列表，完全合法，不在这里报。
+    members_by_id = {
+        record.get("id"): record
+        for record in ctx.store.list_raw("member", include_deleted=True)
+        if record.get("id")
+    }
+    dangling_owners: list[str] = []
+    inactive_owners: list[str] = []
+    for area in records_by_type.get("area") or []:
+        for owner_id in area.get("owner_ids") or []:
+            record = members_by_id.get(owner_id)
+            if record is None:
+                dangling_owners.append(f"{area.get('name')} -> {short_id(owner_id)}")
+            elif not record.get("active", False):
+                inactive_owners.append(f"{area.get('name')} -> {short_id(owner_id)}")
+
+    if dangling_owners:
+        add(
+            "area.owners",
+            "error",
+            f"{len(dangling_owners)} area owner reference(s) point at a missing member: "
+            + ", ".join(dangling_owners[:5])
+            + ("..." if len(dangling_owners) > 5 else ""),
+            details={"dangling": dangling_owners},
+        )
+    elif inactive_owners:
+        add(
+            "area.owners",
+            "warning",
+            f"{len(inactive_owners)} area owner(s) are inactive members: "
+            + ", ".join(inactive_owners[:5]),
+            details={"inactive": inactive_owners},
+        )
+    else:
+        add("area.owners", "ok", "area owner references resolve")
+
+    unknown_roles: set[str] = set()
+    for record in members_by_id.values():
+        for role in record.get("roles") or []:
+            if str(role) not in KNOWN_ROLES:
+                unknown_roles.add(str(role))
+    if unknown_roles:
+        add(
+            "member.roles",
+            "warning",
+            f"non-standard role(s): {', '.join(sorted(unknown_roles))}; "
+            f"known roles: {', '.join(KNOWN_ROLES)}",
+            details={"unknown": sorted(unknown_roles)},
+        )
+    else:
+        add("member.roles", "ok", "member roles are standard")
 
     # 派生缓存被提交进 Git -> 多人合并时几乎每次都冲突（V1-C 探针实测
     # 9 个真实场景 8 个因此冲突；排除后 8/9 干净，剩下的本来就该冲突）。

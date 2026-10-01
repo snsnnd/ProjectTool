@@ -149,6 +149,7 @@ def area_summary(area: Area, tasks: dict[str, Task]) -> dict[str, Any]:
         "description": area.description,
         "parent_area_id": area.parent_area_id,
         "path_patterns": list(area.path_patterns),
+        "owner_ids": list(area.owner_ids),
         "task_ids": task_ids,
         "task_count": len(task_ids),
         "version": area.version,

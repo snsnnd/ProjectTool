@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from project_tool.application.context import UNSET, ServiceContext
+from project_tool.application.context import UNSET, ServiceContext, as_list
 from project_tool.domain.area import Area
 from project_tool.domain.area_paths import match_any, normalize_path_patterns
 from project_tool.domain.enums import Lifecycle
@@ -135,6 +135,63 @@ class AreaService:
             {"fields": ["parent_area_id"], "from": old, "to": new_parent},
         )
         return project_graph.area_summary(area, self.ctx.tasks_by_id())
+
+    def area_set_owner(
+        self, area_id, add=None, remove=None, expected_rev=None
+    ) -> dict[str, Any]:
+        """设置 Area 的负责成员（显式，不推导）。
+
+        语义是**增删**而不是整体替换：`--add` / `--remove` 可以分别用，
+        也可以一起用（换人时一步到位）。两个都不给就是 no-op，不产生事件。
+
+        刻意不做本地权限门禁：工具将来上服务器后，权限以服务器为准。
+        现在硬编码一个本地门禁只会制造「已经管住了」的错觉，而
+        `.pjt/objects/**` 是可读 JSON 跟着 Git 走，谁都能改（V1-C 决策）。
+        「谁被授权改 owner」因此**只记录在事件里**（谁改的、改成什么），
+        由人和服务器去审，而不是由 CLI 假装拦截。
+        """
+        area = self.ctx.load("area", self.ctx.require_area_id(area_id))
+        base = self.ctx.require_expected_rev("area", area, expected_rev)
+        to_add = self._require_members(add, "add")
+        to_remove = self._require_members(remove, "remove")
+
+        current = list(area.owner_ids)
+        updated = list(current)
+        for member_id in to_add:
+            if member_id not in updated:
+                updated.append(member_id)
+        removed = [member_id for member_id in to_remove if member_id in updated]
+        updated = [member_id for member_id in updated if member_id not in to_remove]
+
+        if updated == current:
+            return project_graph.area_summary(area, self.ctx.tasks_by_id())
+        area.owner_ids = updated
+        return self.ctx.save(
+            area,
+            base,
+            "area.updated",
+            {
+                "fields": ["owner_ids"],
+                "from": current,
+                "to": updated,
+                "added": to_add,
+                "removed": removed,
+            },
+        )
+
+    def _require_members(self, refs, label: str) -> list[str]:
+        """把成员引用（handle 或 MBR- id）解析成 MBR id。
+
+        和 `task.assign` 用同一个 `ctx.member_id`，所以两种写法都认。
+        **不要求 active**：owner 描述的是归属，人休假/暂停也不会失去
+        自己那块地。已经 deleted 的成员由 doctor 判 error。
+        """
+        resolved: list[str] = []
+        for ref in as_list(refs):
+            member_id = self.ctx.member_id(ref)
+            if member_id not in resolved:
+                resolved.append(member_id)
+        return resolved
 
     def area_match_path(self, path) -> list[dict[str, Any]]:
         """哪些 Area 的 `path_patterns` 命中这个 project-relative 路径。

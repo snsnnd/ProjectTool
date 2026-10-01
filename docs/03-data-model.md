@@ -244,7 +244,8 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
   "name": "Debug",
   "description": "真机调试与传输层",
   "parent_area_id": null,
-  "path_patterns": []
+  "path_patterns": [],
+  "owner_ids": ["MBR-01K8H61N2B"]
 }
 ```
 
@@ -259,8 +260,23 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
   **绝不自动改写 `Task.area_id`**。Area 是人工判断的结构信息，从路径机械推导并回写
   会把跨 Area 的 commit 错误归类。
 - Area 回答「这个工作属于哪里？」（模块 / 子系统），Milestone 回答「这个工作服务于哪个阶段？」。
-- **没有** `status` / `progress` / `due_at` / `owner`：给它加进度就退化成第二个 Milestone。
-  读视图 `area.get` / `area.list` / `graph.project` 也**不返回 progress**。
+- **仍然没有** `status` / `progress` / `due_at` / `weight`：它们是**时间维度**，
+  加上就退化成第二个 Milestone。读视图也**不返回 progress**。
+- **`owner_ids`（V1-C 追加）**：V1-A 当初把 `owner` 和上面几个字段一起排除，
+  理由是「加时间维度就会变成第二个 Milestone」——**这个理由对 owner 不成立**。
+  owner 是**人的维度**，和「哪个模块」「哪个阶段」正交，不携带任何时间语义。
+  显式设置，不从「谁在这块有 task」推导（推导会把「曾经碰过一个 task 的人」
+  都算成 owner，噪音大，而且和「负责」不是一回事）。
+  - **复数是刻意的**：空 = 未分配；1 个 = 私有块；**多个 = 公共接口区**
+    （例如被 UI / 数据流 / 状态机共同依赖的 core）。不需要额外的 `shared: bool`，
+    两个字段还可能互相矛盾。
+  - 引用不存在的 member = 数据损坏，`doctor` 判 **error**；owner 是 inactive
+    member 判 warning。「还没分配」是空列表，完全合法。
+  - 变更只记录在事件里（`area.updated`，payload 带 `from` / `to` / `added` / `removed`），
+    **不做本地权限门禁**——见下方「权限留给服务器」。
+- **不要**给 Milestone / Goal 也加 owner：Area 是唯一的**分区**单元，Milestone 是
+  时间轴、Goal 是结果，都不是分区。到处加 owner 会让 Area 和 Milestone 重新长成
+  一个东西，那正是 V1-A 花力气拆开的。
 - `parent_area_id` 支持简单父子层级（`UI ├── Editor └── Debug UI`）；
   环检测与 goal/task parent 复用同一套 `_validate_chain`。
 - 名称**不强制唯一**（与 goal/milestone/task 的 title 一致）；按名称引用时不唯一则报
@@ -271,6 +287,68 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
   `refs/labels.json` 仍然只聚合 Task.labels，不含 Area。
 - Area **不进入** `pjt status`（避免信息过载），只在 `task show` / `task list --area` /
   `graph project` 中出现。
+
+### 4.7c 接口契约（V1-C：固定模板的 markdown）
+
+**不是一等对象。** 这是刻意的设计选择，值得说明理由：
+
+接口文档的正文本来就是人写的散文，硬塞进 JSON 的 `spec: dict` 只会让人绕过工具；
+而 diff / blame / 历史 Git 已经做得比任何自建机制好，不该重复造。真正的价值是
+「**有一个固定的沟通区域 + 统一模板**」，不是类型系统。
+
+所以接口 = **工作树里一份 markdown 文件 + 注册成 `kind=file` 的 Artifact**。
+默认落盘位置 `docs/interfaces/<slug>.md`（`pjt interface init` 可用 `--path` 覆盖）。
+
+```markdown
+---
+name: store.updateModel
+kind: store_api          # module_api | store_api | event | protocol | other
+status: draft            # draft | review | agreed | deprecated
+area: core               # **Area 名字**，不是 ARA- id —— 这份文档是给人看的
+owners: [jichao]
+consumers: [ui, dataflow]
+version: 1
+---
+
+# store.updateModel
+
+## 用途
+## 契约
+## 变更规则
+## 兼容策略
+## 变更历史
+```
+
+- **front-matter 是机器可读的**（将来做自动索引：谁依赖什么、哪些是 `agreed`），
+  正文必需章节是**强制沟通清单**。解析刻意不引入 yaml 依赖——依赖越少，
+  20 个人在各自机器上装出来的行为越一致。
+- 必填字段只有 `name` / `status` / `area` / `kind`。`consumers` **按 status 分级**：
+  `draft` 可以空着，`review` / `agreed` 必须写清消费者。
+  （第一版把 `consumers` 也设成必填，结果 `interface init` 不带 `--consumer`
+  直接失败——而「还没想清楚谁在用」正是 draft 阶段的常态。**没人填得上的必填字段
+  比没有更糟**，它只会训练大家绕过检查。）
+- `interface check` 兑现「固定模板」的可检查性：未知 status、缺必填字段、
+  缺必需章节 → error；空章节 → warning。**只报告，不改写**——工具替人改契约
+  比不检查更糟。有 error 时退出码 1，可以直接当 CI 门禁。
+- **不新增事件类型**：建接口 = `artifact.added` + 写文件；改内容 = 人用编辑器改
+  （Git 记录）；`interface sync` 只在 front-matter 改了 area 时补一条
+  `artifact.updated`。事件语义保持干净：Artifact 就是 Artifact。
+- front-matter 的 `area` 与 Artifact 的 `related_area_ids` 是**双向**的，
+  以 front-matter 为准（`interface sync` 负责对齐），避免两处打架。
+
+### 4.7d 权限：留给服务器（V1-C 明确不做）
+
+`Member.roles` 是**自由字符串**，`KNOWN_ROLES = (leader, member, viewer)` 只是
+**建议词汇表**——未知值让 `doctor` 报 **warning** 而不是 error，因为老项目可能
+已经有自由写的 role，不能因此判 `PROJECT_CORRUPTED`。
+
+工具将来上服务器后，权限以**服务器**为准。现在加本地门禁只会制造「已经管住了」
+的错觉：`.pjt/objects/**` 是可读 JSON 跟着 Git 走，任何人都能 push 修改。
+所以本地只做**记录**：谁改了归属、改成什么，都进 append-only 事件，供人和服务器去审。
+
+> 真实数据提醒：EFW 项目里的 role 是 `maintainer`，不在建议词汇表内，
+> 因此 `doctor` 会报一条 warning。这是**待决问题**而不是 bug——
+> 服务器权限模型落地时要决定 `maintainer` 是不是第 4 个角色。
 
 ### 4.8 Artifact（V1-A：reference 语义，无内容存储）
 

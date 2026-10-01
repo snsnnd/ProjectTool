@@ -33,6 +33,7 @@ from project_tool.cli import (
     artifact,
     decision,
     goal,
+    interface,
     link,
     member,
     milestone,
@@ -84,6 +85,7 @@ app.command()(project_module.migrate)
 app.add_typer(task.task_app, name="task")
 app.add_typer(area.area_app, name="area")
 app.add_typer(artifact.artifact_app, name="artifact")
+app.add_typer(interface.interface_app, name="interface")
 app.add_typer(git_module.git_app, name="git")
 app.add_typer(project_module.project_app, name="project")
 app.add_typer(goal.goal_app, name="goal")

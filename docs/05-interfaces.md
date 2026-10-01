@@ -264,8 +264,9 @@ pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
           |archive|restore|delete|history|set-parent
 pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
-          |tasks|set-parent|match-path|history
-pjt artifact add|list|show|edit|attach|detach|remove|verify|history
+          |tasks|set-parent|set-owner|match-path|history
+pjt artifact add|list|show|edit|attach|detach|remove|verify|history   （attach/detach 支持 --area）
+pjt interface init|list|show|check|sync     （接口契约：固定模板的 markdown）
 pjt member add|list|show|edit|map-git|deactivate|activate|workload|activity|use
 pjt update add|list|show|edit|archive|history
 pjt decision add|list|show|accept|reject|supersede|history

@@ -174,9 +174,12 @@ class ArtifactService:
         decision=None,
         milestone=None,
         goal=None,
+        area=None,
         expected_rev=None,
     ) -> dict[str, Any]:
-        return self._bind(artifact_id, task, decision, milestone, goal, expected_rev, attach=True)
+        return self._bind(
+            artifact_id, task, decision, milestone, goal, area, expected_rev, attach=True
+        )
 
     def artifact_detach(
         self,
@@ -185,9 +188,12 @@ class ArtifactService:
         decision=None,
         milestone=None,
         goal=None,
+        area=None,
         expected_rev=None,
     ) -> dict[str, Any]:
-        return self._bind(artifact_id, task, decision, milestone, goal, expected_rev, attach=False)
+        return self._bind(
+            artifact_id, task, decision, milestone, goal, area, expected_rev, attach=False
+        )
 
     def _bind(
         self,
@@ -196,6 +202,7 @@ class ArtifactService:
         decision,
         milestone,
         goal,
+        area,
         expected_rev,
         attach: bool,
     ) -> dict[str, Any]:
@@ -206,17 +213,25 @@ class ArtifactService:
             "decision": (decision, "decision"),
             "milestone": (milestone, "milestone"),
             "goal": (goal, "goal"),
+            # area 用 area_id() 解析（它按 name 或 id 都认，并做循环校验），
+            # 不用通用 resolve_ref——那会把 "core" 当成非法 id。
+            "area": (area, "area"),
         }
         if not any(raw for raw, _ in targets.values()):
             raise InvalidArgument(
-                "artifact.attach/detach needs at least one of: task, decision, milestone, goal"
+                "artifact.attach/detach needs at least one of: "
+                "task, decision, milestone, goal, area"
             )
         changes: list[dict[str, Any]] = []
         for label, (raw, obj_type) in targets.items():
             if not raw:
                 continue
             for ref in _as_list(raw):
-                resolved = self.ctx.resolve_ref(obj_type, ref)
+                resolved = (
+                    self.ctx.area_id(ref)
+                    if obj_type == "area"
+                    else self.ctx.resolve_ref(obj_type, ref)
+                )
                 field = _field_for(label)
                 current = list(getattr(artifact, field))
                 if attach and resolved in current:

@@ -36,6 +36,7 @@ def build_registry(service) -> dict[str, MethodSpec]:
     gits = service.git
     logs = service.logs
     graphs = service.graphs
+    ifaces = service.interfaces
 
     specs = [
         # system
@@ -81,6 +82,9 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec("area.list", areas.area_list, False, "area", "list areas"),
         MethodSpec("area.update", areas.area_update, True, "area", "update area"),
         MethodSpec("area.set_parent", areas.area_set_parent, True, "area", "set parent area"),
+        MethodSpec(
+            "area.set_owner", areas.area_set_owner, True, "area", "add/remove area owners"
+        ),
         MethodSpec("area.archive", areas.area_archive, True, "area", "archive area"),
         MethodSpec("area.restore", areas.area_restore, True, "area", "restore area"),
         MethodSpec("area.tasks", areas.area_tasks, False, "area", "tasks in an area"),
@@ -189,6 +193,22 @@ def build_registry(service) -> dict[str, MethodSpec]:
             "drop a machine-local path mapping (local.toml, no event)",
         ),
         # git（只读感知；link_commit 只写 .pjt，不写仓库）
+        # interface（V1-C）：工作树里的固定模板 markdown + Artifact 注册
+        MethodSpec(
+            "interface.init", ifaces.interface_init, True, "interface", "scaffold an interface doc"
+        ),
+        MethodSpec(
+            "interface.list", ifaces.interface_list, False, "interface", "list interface docs"
+        ),
+        MethodSpec(
+            "interface.show", ifaces.interface_show, False, "interface", "read one interface doc"
+        ),
+        MethodSpec(
+            "interface.sync", ifaces.interface_sync, True, "interface", "align artifact with front-matter"
+        ),
+        MethodSpec(
+            "interface.check", ifaces.interface_check, False, "interface", "validate interface docs"
+        ),
         MethodSpec("git.available", gits.git_available, False, "git", "git availability"),
         MethodSpec("git.status", gits.git_status, False, "git", "changed files + candidate areas"),
         MethodSpec("git.log", gits.git_log, False, "git", "commit history by task trailer"),

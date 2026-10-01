@@ -25,6 +25,9 @@ RELATION_FIELDS = (
     ("decision", "related_decision_ids"),
     ("milestone", "related_milestone_ids"),
     ("goal", "related_goal_ids"),
+    # V1-C：接口契约文档要能挂到 Area 上（`pjt artifact attach --area`），
+    # 这样"哪份接口归哪块管"和 Area 侧的 owner_ids 能对上。
+    ("area", "related_area_ids"),
 )
 
 
@@ -41,5 +44,8 @@ class Artifact(BaseObject):
     related_decision_ids: list[str] = Field(default_factory=list)
     related_milestone_ids: list[str] = Field(default_factory=list)
     related_goal_ids: list[str] = Field(default_factory=list)
+    # V1-C：接口契约文档靠它绑定「归哪个 Area 管」。Area 侧也有 owner_ids，
+    # 两个方向合起来才能回答「这块归谁 + 这份接口归谁管」。
+    related_area_ids: list[str] = Field(default_factory=list)
 
     metadata: dict[str, Any] = Field(default_factory=dict)

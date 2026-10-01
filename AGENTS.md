@@ -23,8 +23,8 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（271 passed）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
-  **Artifact** / Link；Service 110 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
-  `link.map_local_path`/`unmap_local_path`）。V1-C 已起步：派生缓存治理。
+  **Artifact** / Link；Service 116 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
+  `link.map_local_path`/`unmap_local_path` + V1-C 的 `area.set_owner` 与 5 个 `interface.*`）。V1-C 进行中：派生缓存治理 + Area owner + 接口契约。
 - 真实使用：EFW Studio（`framework@tmp/new` 的 `new/efw`）已完成两轮 dogfooding，零源码污染；
   数据保留在 `new/efw/.pjt`。报告：`dogfooding/report.md`（V0.1）、
   `dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（V1-A）。
@@ -66,6 +66,21 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     （V1-C 探针实测 1/9 vs 8/9）。`pjt init` 写好 ignore 规则、`pjt migrate`
     给老项目幂等补齐、`pjt doctor` 把「被 git 跟踪」判为 **error**。
     工具只报告，`git rm --cached` 由人执行（Git 适配器只读，§11）。
+
+15. **Area 分区靠 owner，公共区靠复数**：每个 Area 显式设置 `owner_ids`
+    （不推导）。**1 个 owner = 私有块，多个 = 公共接口区**（如被 UI/数据流/
+    状态机共同依赖的 core）——不需要额外的 `shared` 字段。**不要**给
+    Milestone/Goal 也加 owner：只有 Area 是分区单元，到处加会让它退化成
+    第二个 Milestone（V1-A 的核心不变量）。
+16. **不做本地权限门禁**：工具将来上服务器，权限以服务器为准。`.pjt/objects/**`
+    是可读 JSON 跟着 Git 走，本地门禁只会制造「已经管住了」的错觉。
+    `Member.roles` 是自由字符串，`KNOWN_ROLES` 只是建议词汇表（未知值 = warning，
+    不是 error——老项目可能有自由 role，不能因此判 corrupted）。谁改了什么一律
+    记进 append-only 事件，供人和服务器去审。
+17. **接口契约不是一等对象**：它是工作树里一份**固定模板**的 markdown + 注册成
+    `kind=file` 的 Artifact。正文是人写的散文，硬塞进 JSON 只会让人绕过工具；
+    diff/blame/历史 Git 已经做得更好。`pjt interface check` 只报告不改写，
+    有 error 时退出码 1（可直接当 CI 门禁）。
 
 ## 3. 常用命令
 

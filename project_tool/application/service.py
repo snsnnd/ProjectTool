@@ -24,6 +24,7 @@ from project_tool.application.services.decision import DecisionService
 from project_tool.application.services.git import GitService
 from project_tool.application.services.goal import GoalService
 from project_tool.application.services.graph import GraphService
+from project_tool.application.services.interface import InterfaceService
 from project_tool.application.services.link import LinkService
 from project_tool.application.services.log import LogService
 from project_tool.application.services.member import MemberService
@@ -73,6 +74,7 @@ class ProjectService:
         self.artifacts.gits = self.git
         self.logs = LogService(self.ctx)
         self.graphs = GraphService(self.ctx, self.links)
+        self.interfaces = InterfaceService(self.ctx)
 
         self.registry: dict[str, MethodSpec] = build_registry(self)
 

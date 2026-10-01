@@ -357,6 +357,86 @@ def render_link_status(result: dict[str, Any]) -> None:
         )
 
 
+def _status_badge(status: str | None, missing: bool) -> str:
+    if missing:
+        return "[red]unreadable[/red]"
+    colors = {
+        "draft": "dim",
+        "review": "yellow",
+        "agreed": "green",
+        "deprecated": "magenta",
+    }
+    key = status or "?"
+    color = colors.get(key, "red")
+    return f"[{color}]{key}[/{color}]"
+
+
+def render_interface_list(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        console.print("[dim]no interface documents registered[/dim]")
+        console.print("[dim]create one with: pjt interface init <name> --area <area>[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+    table.add_column("ID", style="dim", no_wrap=True, min_width=13)
+    table.add_column("Status", no_wrap=True, min_width=10)
+    table.add_column("Name", overflow="ellipsis", no_wrap=True, ratio=1)
+    table.add_column("Area", no_wrap=True, min_width=10)
+    table.add_column("Consumers", style="dim", no_wrap=True, min_width=10)
+    for row in rows:
+        document = row.get("document") or {}
+        bad = bool(row.get("read_error"))
+        consumers = document.get("consumers") or []
+        table.add_row(
+            sid(row["id"]),
+            _status_badge(document.get("status"), bad),
+            ellipsis(row.get("name") or "", 46),
+            ellipsis(", ".join(row.get("area_names") or []), 20) or "-",
+            ellipsis(", ".join(str(item) for item in consumers), 24) or "-",
+        )
+    console.print(table)
+
+
+def render_interface_show(result: dict[str, Any]) -> None:
+    console.print(f"[green]registered[/green] {result['id']}  {result.get('name')}")
+    console.print(f"  {result['locator']}")
+    if result.get("area_names"):
+        console.print(f"  area    {', '.join(result['area_names'])}")
+    console.print(
+        f"  [dim]next: edit the file, then 'pjt interface check {result.get('name')}'[/dim]"
+    )
+
+
+def render_interface_check(result: dict[str, Any]) -> None:
+    rows = result.get("interfaces") or []
+    if not rows:
+        console.print("[dim]no interface documents registered[/dim]")
+        return
+    for row in rows:
+        mark = "[green]OK[/green]" if row["ok"] else "[red]FAIL[/red]"
+        status = (row.get("status") or "?")
+        console.print(f"{mark} {sid(row['id'])}  {row['name']}  [dim]{status}[/dim]  {row['locator']}")
+        for finding in row.get("findings") or []:
+            level = finding["level"]
+            color = "red" if level == "error" else "yellow"
+            console.print(f"      [{color}]{level}[/{color}] {finding['message']}")
+    summary = result.get("errors", 0)
+    console.print(
+        f"\n{'OK' if result.get('ok') else 'FAILED'}: "
+        f"{len(rows)} document(s), {summary} error(s), {result.get('warnings', 0)} warning(s)"
+    )
+
+
+def render_area_owners(result: dict[str, Any]) -> None:
+    owners = list(result.get("owner_ids") or [])
+    if not owners:
+        console.print(f"{result['id']}  owners: [yellow]unassigned[/yellow]")
+        console.print("  [dim]set with: pjt area set-owner <area> --add <member>[/dim]")
+        return
+    # 多个 owner = 公共接口区，明说，别让人猜
+    tail = "  [dim](shared interface area)[/dim]" if len(owners) > 1 else ""
+    console.print(f"{result['id']}  owners: {', '.join(sid(item) for item in owners)}{tail}")
+
+
 def render_area_matches(result: list[dict[str, Any]]) -> None:
     """`pjt area match-path` —— 哪些 Area 的 path_patterns 认领了这个路径（只读推导）。"""
     if not result:
@@ -368,10 +448,20 @@ def render_area_matches(result: list[dict[str, Any]]) -> None:
             console.print(f"    [dim]{pattern}[/dim]")
 
 
+def _owner_label(owners) -> str:
+    owners = list(owners or [])
+    if not owners:
+        return "[yellow]unassigned[/yellow]"
+    if len(owners) == 1:
+        return sid(owners[0])
+    return f"{sid(owners[0])} [dim]+{len(owners) - 1} shared[/dim]"
+
+
 def render_area_show(result: dict[str, Any]) -> None:
     console.print(f"[bold]{result['id']}[/bold]  {result['name']}  [dim]({result['lifecycle']})[/dim]")
     if result.get("parent_area_id"):
         console.print(f"  parent    {sid(result['parent_area_id'])}")
+    console.print(f"  owners    {_owner_label(result.get('owner_ids'))}")
     console.print(f"  tasks     {result['task_count']}")
     if result.get("description"):
         console.print(f"\n  {result['description']}")
