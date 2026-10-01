@@ -35,6 +35,17 @@ def windows(monkeypatch):
     return monkeypatch
 
 
+@pytest.fixture()
+def posix(monkeypatch):
+    """强制走非 Windows 分支。
+
+    必须显式设置：这个测试文件在 Windows CI 上跑，那边 IS_WINDOWS 本来就是
+    True，忘了改就会去断言「不重试」而实际重试了 40 次。
+    """
+    monkeypatch.setattr(filesystem, "IS_WINDOWS", False)
+    return monkeypatch
+
+
 def fails_then_succeeds(real, fail_times: int, calls: dict, error=PermissionError, code=32):
     def call(*args, **kwargs):
         calls["n"] += 1
@@ -72,7 +83,7 @@ def test_atomic_write_gives_up_eventually(windows, tmp_path):
     assert list(tmp_path.glob("*.tmp")) == [], "失败时不能留下临时文件"
 
 
-def test_permission_errors_are_not_retried_off_windows(tmp_path):
+def test_permission_errors_are_not_retried_off_windows(posix, tmp_path):
     """非 Windows 上 PermissionError 是真的权限问题，等它没有意义。"""
     calls = {"n": 0}
 
