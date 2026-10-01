@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -40,6 +41,10 @@ from project_tool.storage import init_project, open_project
 AGENTS = ("agent-1", "agent-2", "agent-3")
 TASK_COUNT = 4
 MAX_ATTEMPTS = 6
+# 锁忙是争用的正常结果，重试几次就好 —— 不能当成失败
+BUSY_RETRIES = 4
+# 撞车/事务冲突之外不该出现的错误码
+EXPECTED_CODES = {"CLAIMED", "REVISION_CONFLICT", "CONFLICT"}
 
 
 @pytest.fixture()
@@ -81,67 +86,91 @@ def service_for(root: Path, handle: str) -> ProjectService:
     return ProjectService(open_project(root), actor_id=handle)
 
 
+def claim_task(service, task_id: str, handle: str, codes: list[str]) -> bool:
+    """认领。返回 False 表示该 task 已经不是我的了，去换下一个。"""
+    for attempt in range(BUSY_RETRIES):
+        try:
+            service.call(
+                "task.claim",
+                {"task_id": task_id, "member": handle, "ttl_minutes": 20},
+            )
+            return True
+        except Claimed:
+            return False
+        except ProjectToolError as exc:
+            # 锁忙 / 事务冲突是**正常的争用**，不是失败：退避再来一次。
+            # 让它冒泡出去会杀掉整个线程，于是这个 agent 什么都不上报。
+            codes.append(exc.code)
+            if attempt == BUSY_RETRIES - 1:
+                return False
+            time.sleep(0.05 * (attempt + 1))
+    return False
+
+
+def mark_doing(service, task_id: str, codes: list[str]) -> bool:
+    """把 task 推进到 doing。刚认领完的写仍要和别的线程抢锁。"""
+    for attempt in range(BUSY_RETRIES):
+        try:
+            service.call("task.set_status", {"task_id": task_id, "status": "doing"})
+            return True
+        except ProjectToolError as exc:
+            codes.append(exc.code)
+            if attempt == BUSY_RETRIES - 1:
+                return False
+            time.sleep(0.05 * (attempt + 1))
+    return False
+
+
 def agent_loop(root: Path, handle: str, results: dict, barrier: threading.Barrier | None = None):
-    """一个 agent 的完整开工流程：`next` → 读契约 → `claim` → 干活。"""
+    """一个 agent 的完整开工流程：`next` → 读契约 → `claim` → 干活。
+
+    这里**任何异常都不许逃出线程**，`finally` 保证 `results[handle]` 一定被写入。
+    一个悄悄死掉的线程不会让 pytest 报出跟它有关的断言，只会在别处表现成
+    KeyError —— 看起来完全不相干。锁忙、barrier 超时都足以造成这种失败。
+    """
     service = service_for(root, handle)
     tried: set[str] = set()
     read_contracts: list[str] = []
     collisions = 0
+    codes: list[str] = []
+    state: dict = {"outcome": "gave-up", "task": None}
     # barrier **只能用一次**：它是 parties=3 的一次性汇合，认领成功后这个 agent
     # 就走了，剩下两个再等就永远等不到第三个 -> BrokenBarrierError。
     first_round = True
+    try:
+        for _ in range(MAX_ATTEMPTS):
+            brief = service.call("task.next")
+            if not brief["found"]:
+                state["outcome"] = "idle"
+                return
+            chosen = brief["task"]
 
-    for _ in range(MAX_ATTEMPTS):
-        brief = service.call("task.next")
-        if not brief["found"]:
-            results[handle] = {"outcome": "idle", "task": None, "collisions": collisions}
-            return
-        chosen = brief["task"]
+            # 开工前读契约：agent 没有隐性知识，这一步不能省
+            for row in brief["interfaces"]:
+                read_contracts.append(row["name"])
 
-        # 开工前读契约：agent 没有隐性知识，这一步不能省
-        for row in brief["interfaces"]:
-            read_contracts.append(row["name"])
+            if barrier is not None and first_round:
+                # 让所有 agent 都先看到同一个最优 task，再同时认领 —— 碰撞必然发生
+                first_round = False
+                try:
+                    barrier.wait(timeout=30)
+                except threading.BrokenBarrierError:
+                    pass  # 汇合失败不该杀死 agent，照常往下走
 
-        if barrier is not None and first_round:
-            # 让所有 agent 都先看到同一个最优 task，再同时认领 —— 碰撞必然发生
-            first_round = False
-            barrier.wait(timeout=30)
-
-        if chosen["id"] in tried:
-            continue
-        tried.add(chosen["id"])
-        try:
-            service.call(
-                "task.claim",
-                {"task_id": chosen["id"], "member": handle, "ttl_minutes": 20},
-            )
-        except Claimed:
-            collisions += 1
-            continue
-        except ProjectToolError as exc:  # pragma: no cover - 下面会断言不该发生
-            results[handle] = {
-                "outcome": "error",
-                "task": None,
-                "collisions": collisions,
-                "error": f"{exc.code}: {exc}",
-            }
-            return
-
-        service.call("task.set_status", {"task_id": chosen["id"], "status": "doing"})
-        results[handle] = {
-            "outcome": "worked",
-            "task": chosen["id"],
-            "collisions": collisions,
-            "read_contracts": read_contracts,
-        }
-        return
-
-    results[handle] = {
-        "outcome": "gave-up",
-        "task": None,
-        "collisions": collisions,
-        "read_contracts": read_contracts,
-    }
+            if chosen["id"] in tried:
+                continue
+            tried.add(chosen["id"])
+            if not claim_task(service, chosen["id"], handle, codes):
+                collisions += 1
+                continue
+            if mark_doing(service, chosen["id"], codes):
+                state.update(outcome="worked", task=chosen["id"])
+                return
+    finally:
+        state["collisions"] = collisions
+        state["read_contracts"] = read_contracts
+        state["codes"] = codes
+        results[handle] = state
 
 
 def run_agents(root: Path, barrier: threading.Barrier | None = None) -> dict[str, dict]:
@@ -155,6 +184,8 @@ def run_agents(root: Path, barrier: threading.Barrier | None = None) -> dict[str
     for thread in threads:
         thread.join(timeout=60)
     assert all(not thread.is_alive() for thread in threads), "agent 卡住了"
+    missing = [handle for handle in AGENTS if handle not in results]
+    assert not missing, f"这些 agent 什么也没上报（线程内抛异常了？）: {missing}"
     return results
 
 
@@ -176,8 +207,12 @@ def test_parallel_agents_all_hit_the_same_task_and_only_one_wins(project):
     results = run_agents(project, barrier=threading.Barrier(len(AGENTS)))
     # 第一个认领成功后，后面的 next 会跳过它，所以碰撞次数 >= 2
     assert sum(r["collisions"] for r in results.values()) >= 2, results
+    # 撞车的结果只能是「换任务」，不能是失败退出
+    assert all(r["outcome"] in ("worked", "idle", "gave-up") for r in results.values()), results
+    # 认领过程只允许出现争用类错误码
     for handle, result in results.items():
-        assert result["outcome"] != "error", f"{handle} 拿到意外错误: {result.get('error')}"
+        unexpected = sorted(set(result["codes"]) - EXPECTED_CODES)
+        assert not unexpected, f"{handle} 拿到意外错误码: {unexpected}"
 
 
 def test_a_collision_switches_task_instead_of_failing(project):
