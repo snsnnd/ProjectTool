@@ -1,4 +1,6 @@
-# 临时：文件内二分，定位是第几个测试开始的
+# 临时诊断：把 Windows 的 pytest 失败输出推到 ci-diagnostics 分支，
+# 因为 job 日志需要 auth 读不到，而 job 名字只能带有限信息。
+# 定位完就删掉这个 workflow 和分支。
 name: Diagnose
 
 on:
@@ -7,26 +9,37 @@ on:
     branches: [main]
 
 jobs:
-  prefix:
-    name: "win :: {{ matrix.label }}"
+  win:
+    name: "win :: multiagent"
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: "first 2"
-            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins'"
-          - label: "first 4"
-            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins or test_a_collision_switches_task_instead_of_failing or test_parallel_run_leaves_data_intact'"
-          - label: "first 6"
-            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins or test_a_collision_switches_task_instead_of_failing or test_parallel_run_leaves_data_intact or test_every_agent_read_the_interface_contracts_first or test_events_are_attributed_to_the_right_agent'"
-          - label: "first 8"
-            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins or test_a_collision_switches_task_instead_of_failing or test_parallel_run_leaves_data_intact or test_every_agent_read_the_interface_contracts_first or test_events_are_attributed_to_the_right_agent or test_second_claimer_is_told_to_pick_another_task or test_unclaimed_filter_hides_taken_work'"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
       - run: uv sync
       - name: Run
-        run: uv run pytest -rf --tb=short -p no:cacheprovider {{ matrix.sel }}
+        run: uv run pytest -rf --tb=long -p no:cacheprovider tests/test_multiagent_flow.py
+      - name: Publish failure
+        if: failure()
+        run: |
+          New-Item -ItemType Directory -Force -Path diag | Out-Null
+          "exit=$LASTEXITCODE" | Out-File diag/summary.txt
+          Write-Host "see diag/ on branch ci-diagnostics"
+      - name: Push diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          git config user.name ci
+          git config user.email ci@example.com
+          git checkout --orphan ci-diagnostics
+          git rm -r --cached . -q 2>$null
+          Remove-Item -Recurse -Force * -Exclude .git -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path diag | Out-Null
+          Copy-Item .github/workflows/ci.yml diag/ci.yml -ErrorAction SilentlyContinue
+          "run id: ${{ github.run_id }}" | Out-File diag/meta.txt
+          git add -A
+          git commit -m "diagnostics: windows multiagent failure"
+          git push -f origin ci-diagnostics
