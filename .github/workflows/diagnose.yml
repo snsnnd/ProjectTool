@@ -1,6 +1,5 @@
-# 临时诊断：把 Windows 的 pytest 失败输出推到 ci-diagnostics 分支。
-# job 日志需要 auth 读不到，而匿名 jobs API 只暴露 step 名字 —— 拿不到 traceback。
-# 定位完就删掉这个 workflow 和分支。
+# 临时：文件内二分。8 个测试单独都过，整文件跑挂 —— 找互相干扰的那一对。
+# 用多个 node ID 而不是 -k，省掉 YAML 转义地狱。
 name: Diagnose
 
 on:
@@ -9,9 +8,23 @@ on:
     branches: [main]
 
 jobs:
-  win:
-    name: "win :: full suite"
+  prefix:
+    name: "win :: ${{ matrix.label }}"
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: "first 2"
+            sel: "tests/test_multiagent_flow.py::test_parallel_agents_never_double_work tests/test_multiagent_flow.py::test_parallel_agents_all_hit_the_same_task_and_only_one_wins"
+          - label: "first 3"
+            sel: "tests/test_multiagent_flow.py::test_parallel_agents_never_double_work tests/test_multiagent_flow.py::test_parallel_agents_all_hit_the_same_task_and_only_one_wins tests/test_multiagent_flow.py::test_a_collision_switches_task_instead_of_failing"
+          - label: "first 4"
+            sel: "tests/test_multiagent_flow.py::test_parallel_agents_never_double_work tests/test_multiagent_flow.py::test_parallel_agents_all_hit_the_same_task_and_only_one_wins tests/test_multiagent_flow.py::test_a_collision_switches_task_instead_of_failing tests/test_multiagent_flow.py::test_parallel_run_leaves_data_intact"
+          - label: "first 6"
+            sel: "tests/test_multiagent_flow.py::test_parallel_agents_never_double_work tests/test_multiagent_flow.py::test_parallel_agents_all_hit_the_same_task_and_only_one_wins tests/test_multiagent_flow.py::test_a_collision_switches_task_instead_of_failing tests/test_multiagent_flow.py::test_parallel_run_leaves_data_intact tests/test_multiagent_flow.py::test_every_agent_read_the_interface_contracts_first tests/test_multiagent_flow.py::test_events_are_attributed_to_the_right_agent"
+          - label: "first 8"
+            sel: "tests/test_multiagent_flow.py::test_parallel_agents_never_double_work tests/test_multiagent_flow.py::test_parallel_agents_all_hit_the_same_task_and_only_one_wins tests/test_multiagent_flow.py::test_a_collision_switches_task_instead_of_failing tests/test_multiagent_flow.py::test_parallel_run_leaves_data_intact tests/test_multiagent_flow.py::test_every_agent_read_the_interface_contracts_first tests/test_multiagent_flow.py::test_events_are_attributed_to_the_right_agent tests/test_multiagent_flow.py::test_second_claimer_is_told_to_pick_another_task tests/test_multiagent_flow.py::test_unclaimed_filter_hides_taken_work"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -19,26 +32,4 @@ jobs:
           python-version: "3.12"
       - run: uv sync
       - name: Run
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Continue"
-          uv run pytest -rf --tb=short -p no:cacheprovider tests/ 2>&1 |
-            Tee-Object -FilePath pytest-output.txt
-          $code = $LASTEXITCODE
-          "pytest exit code: $code" | Out-File -FilePath pytest-output.txt -Append
-          if ($code -ne 0) { exit $code }
-      - name: Publish diagnostics
-        if: failure()
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Continue"
-          git config user.name ci
-          git config user.email ci@example.com
-          git checkout -b ci-diagnostics
-          git add -f pytest-output.txt
-          git commit -m "diagnostics: windows failure output"
-          git push -f origin ci-diagnostics
-          "published run ${{ github.run_id }}" | Out-File -FilePath published.txt -Append
-          git add -f published.txt
-          git commit -m "diagnostics: run id"
-          git push -f origin ci-diagnostics
+        run: "uv run pytest -rf --tb=short -p no:cacheprovider ${{ matrix.sel }}"
