@@ -195,6 +195,30 @@ error           冲突或无法恢复（保留现场，doctor 报 error）
 3. PID 死亡或不可解析，且超过 `stale_after`（默认 60s）→ 视为陈旧，可回收。
 4. 释放时只在 `lock_id` 与自身一致时删除；锁被他人替换后绝不误删。
 5. `pjt doctor --repair` 会清理陈旧锁；持有者是活进程时 repair 会失败并提示。
+6. **锁只串行化「写」，挡不住读。** 读（`task next` / `list` / `doctor`）都在锁
+   之外，所以它挡不住「读的那一瞬间正好撞上替换」—— 详见下面 §6.1。
+
+### 6.1 Windows 共享冲突（`retry_on_sharing_violation`）
+
+Python 打开文件时**没有** `FILE_SHARE_DELETE`。所以只要**任何人**打开着目标文件，
+`os.replace` / `unlink` 就会拿到 `WinError 32`。配合上面第 6 条：读和写都跑得
+好好的，读落在 `os.replace` 的微秒级窗口里，写的一方就会崩 —— **这是真实的多
+agent 用法在 Windows 上的 bug，不是测试的抖动**（CI 上就是靠它抓到的）。
+
+处理方式是**重试**，不是放弃：临时文件在 replace 之前已经写完并 fsync 过，
+重试只是把同一份内容再放一次，不会丢数据。
+
+- `atomic_write_text` / `read_json` / 两处删锁文件都走
+  `filesystem.retry_on_sharing_violation(path, action)`。
+- 预算 40 次 × 25ms = 1s：够覆盖瞬时句柄，又不会变成挂死。
+- **非 Windows 上完全不重试** —— 那里 `PermissionError` 是真的权限问题，
+  等它只会变成无谓的延迟。
+- 开关是 `filesystem.IS_WINDOWS` 常量而不是内联 `os.name` 检查，
+  这样 Linux 上也能直接测 Windows 分支（`tests/test_windows_sharing.py`）。
+
+一个坑：这个重试**不能**写成 `@contextmanager` —— generator 被 `throw()` 重新
+进入后**不允许再次 yield**，于是重试会变成 `RuntimeError: generator didn't stop`。
+必须用回调。
 
 ## 7. state 与 refs（派生数据）
 

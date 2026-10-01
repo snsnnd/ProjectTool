@@ -107,6 +107,12 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     发生），但它验不了跨进程差异（`PJT_ACTOR`、device_id、活 PID 锁）。
     demo 要 210–280 秒，所以不进 CI——改了 `task claim` / WriteLock 之后手动跑一次。
 
+21. **Windows 上的读会打断写，锁挡不住**：Python 打开文件不带 `FILE_SHARE_DELETE`，
+    所以只要有人开着目标文件，`os.replace` / `unlink` 就是 `WinError 32`。读
+    （`task next` / `list` / `doctor`）都在写锁**之外**，撞上了就是一次崩溃。
+    原子写/读/删锁一律走 `filesystem.retry_on_sharing_violation`（40 × 25ms），
+    非 Windows 上不重试。**别把它改回裸 `os.replace`** —— 详见 docs/04 §6.1。
+
 ## 3. 常用命令
 
 ```bash
