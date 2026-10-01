@@ -346,3 +346,4 @@ V0 → V0.1 → V1-A → V1-A.1 → **V1-B（Git 感知层）全部完成**。
 | 08-events | Event contract |
 | 09-handover | 本文件 |
 | 09-v1a-design | V1-A 设计记录（Area / Artifact / revision contract / migration） |
+| 10-kc-integration | **KC 侧接入参考**：数据契约、身份映射、API 接入点、红线 |
