@@ -128,7 +128,6 @@ def agent_loop(root: Path, handle: str, results: dict, barrier: threading.Barrie
     一个悄悄死掉的线程不会让 pytest 报出跟它有关的断言，只会在别处表现成
     KeyError —— 看起来完全不相干。锁忙、barrier 超时都足以造成这种失败。
     """
-    service = service_for(root, handle)
     tried: set[str] = set()
     read_contracts: list[str] = []
     collisions = 0
@@ -138,6 +137,9 @@ def agent_loop(root: Path, handle: str, results: dict, barrier: threading.Barrie
     # 就走了，剩下两个再等就永远等不到第三个 -> BrokenBarrierError。
     first_round = True
     try:
+        # 打开项目本身也要在 try 里：`.pjt` 正在被别的线程替换时它可能失败，
+        # 那样这个 agent 就什么都不上报了
+        service = service_for(root, handle)
         for _ in range(MAX_ATTEMPTS):
             brief = service.call("task.next")
             if not brief["found"]:

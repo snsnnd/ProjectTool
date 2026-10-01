@@ -195,7 +195,9 @@ class WriteLock:
         info = read_lock(self.paths)
         if info is not None and info.get("lock_id") == self.lock_id:
             try:
-                self.lock_path.unlink()
+                filesystem.retry_on_sharing_violation(
+                    self.lock_path, self.lock_path.unlink
+                )
             except FileNotFoundError:
                 pass
         # 锁已被替换或不可解析：保持不动，绝不删除他人的锁
@@ -209,6 +211,8 @@ class WriteLock:
         current_id = current.get("lock_id") if isinstance(current, dict) else None
         if current_id == observed_id and lock_is_stale(self.paths, self.stale_after):
             try:
-                self.lock_path.unlink()
+                filesystem.retry_on_sharing_violation(
+                    self.lock_path, self.lock_path.unlink
+                )
             except FileNotFoundError:
                 pass
