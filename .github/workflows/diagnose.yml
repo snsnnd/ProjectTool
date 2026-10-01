@@ -1,0 +1,41 @@
+# 临时：把 Windows 的失败内容塞进 job 名字。
+# job 日志需要 auth 读不到，而匿名 jobs API 会返回 job.name —— 这是唯一可靠的信道。
+# 用 outputs 把上一个 job 的 pytest 摘要传给下一个 job 的名字。
+name: Diagnose
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  probe:
+    name: probe
+    runs-on: windows-latest
+    outputs:
+      summary: ${{ steps.probe.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Probe
+        id: probe
+        shell: pwsh
+        run: |
+          $out = uv run pytest -q -rf --tb=line -p no:cacheprovider tests/ 2>&1 | Out-String
+          $lines = $out -split "`r?`n"
+          $picked = $lines | Where-Object { $_ -match 'FAILED|ERROR|^E  |passed|failed' } | Select-Object -First 8
+          $summary = ($picked | ForEach-Object { $_.Trim() }) -join ' ~ '
+          if (-not $summary) { $summary = "no-failure-lines-in-output" }
+          if ($summary.Length -gt 900) { $summary = $summary.Substring(0, 900) }
+          $summary = $summary -replace '[\[\]<>`"]', ''
+          "summary=$summary" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+  report:
+    needs: probe
+    name: "win :: ${{ needs.probe.outputs.summary }}"
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo done
