@@ -24,14 +24,20 @@ jobs:
         id: probe
         shell: pwsh
         run: |
-          $out = uv run pytest -q -rf --tb=line -p no:cacheprovider tests/ 2>&1 | Out-String
-          $lines = $out -split "`r?`n"
-          $picked = $lines | Where-Object { $_ -match 'FAILED|ERROR|^E  |passed|failed' } | Select-Object -First 8
-          $summary = ($picked | ForEach-Object { $_.Trim() }) -join ' ~ '
-          if (-not $summary) { $summary = "no-failure-lines-in-output" }
+          $ErrorActionPreference = "Continue"
+          uv run pytest -q -rf --tb=line -p no:cacheprovider tests/ *> probe.txt
+          $code = $LASTEXITCODE
+          $text = Get-Content probe.txt -Raw
+          $picked = ($text -split [Environment]::NewLine) |
+            Where-Object { $_ -match 'FAILED|ERROR|passed|failed' } |
+            Select-Object -First 8
+          $summary = (($picked | ForEach-Object { $_.Trim() }) -join ' ~ ')
+          if (-not $summary) { $summary = "exit=$code but no failure lines found" }
           if ($summary.Length -gt 900) { $summary = $summary.Substring(0, 900) }
-          $summary = $summary -replace '[\[\]<>`"]', ''
-          "summary=$summary" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $summary = $summary -replace '[\[\]<>#*]', ''
+          "summary=$summary" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "PROBE_EXIT=$code SUMMARY=$summary"
+          exit 0
 
   report:
     needs: probe
