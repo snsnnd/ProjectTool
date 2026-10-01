@@ -19,9 +19,9 @@ Git tracks code. Project Tool tracks the project.
 |---|---|
 | 版本 | `0.3.1`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
 | 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 |
-| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **469 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
+| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **483 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
 | 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（Area 映射、Artifact 关联、零污染树哈希） |
-| Service API | 显式 registry，**116 个 method**（CLI 全部触达；`log.*` 经 `pjt log --entity/--member/--since` 与 `pjt <type> history` 可达），`system.capabilities` 可发现（`area/artifact/git = true`） |
+| Service API | 显式 registry，**117 个 method**（CLI 全部触达；`log.*` 经 `pjt log --entity/--member/--since` 与 `pjt <type> history` 可达），`system.capabilities` 可发现（`area/artifact/git = true`） |
 | 已实现 | **Git 感知（只读）**：`git.available` / `git.status` / `git.log` / `git.link_commit` + `Area.path_patterns` |
 | 未实现 | Search / SQLite 索引 / Web / Artifact 内容快照 / 多人 merge 辅助 |
 | 已砍掉 | Remote / Sync / Accounts / Webhook / KC（见 `docs/06` §V2：协作走 Git，不自建服务器） |
@@ -31,7 +31,7 @@ Git tracks code. Project Tool tracks the project.
 ```bash
 cd /path/to/ProjectTool
 uv sync
-uv run pytest                          # 469 passed
+uv run pytest                          # 483 passed
 uv run ruff check . && uv run mypy project_tool
 
 # 在临时目录体验完整流程（不要污染别人的真实项目）
@@ -62,7 +62,7 @@ ProjectTool/
 │   ├── graph/           # 依赖/层级/进度推导
 │   ├── integrations/    # filesystem（原子写、fsync）
 │   └── cli/             # Typer：main/common/render + 各域模块
-├── tests/               # 25 个测试文件，469 cases
+├── tests/               # 26 个测试文件，483 cases
 ├── docs/                # 01–09（09-handover = 本文件，09-v1a-design = 本轮设计记录）
 ├── dogfooding/          # EFW 真实项目验证报告 + 证据 + 可复现脚本
 ├── pyproject.toml       # uv；dev 依赖 pytest/ruff/mypy；ruff+mypy 配置

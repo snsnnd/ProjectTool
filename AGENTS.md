@@ -23,8 +23,8 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（271 passed）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
-  **Artifact** / Link；Service 116 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
-  `link.map_local_path`/`unmap_local_path` + V1-C 的 `area.set_owner` 与 5 个 `interface.*`）。V1-C 进行中：派生缓存治理 + Area owner + 接口契约。
+  **Artifact** / Link；Service 117 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
+  `link.map_local_path`/`unmap_local_path` + V1-C 的 `area.set_owner`、`area.activity` 与 5 个 `interface.*`）。V1-C 进行中：派生缓存治理 + Area owner + 接口契约 + Area 活跃度推导。
 - 真实使用：EFW Studio（`framework@tmp/new` 的 `new/efw`）已完成两轮 dogfooding，零源码污染；
   数据保留在 `new/efw/.pjt`。报告：`dogfooding/report.md`（V0.1）、
   `dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（V1-A）。
@@ -81,6 +81,10 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     `kind=file` 的 Artifact。正文是人写的散文，硬塞进 JSON 只会让人绕过工具；
     diff/blame/历史 Git 已经做得更好。`pjt interface check` 只报告不改写，
     有 error 时退出码 1（可直接当 CI 门禁）。
+18. **别人的在途工作看不见，这是架构事实不是 bug**：`git log` 跟着 Git 走所以
+    所有人都能看到；`git status` 只有本机能看。`area activity` 因此把两者
+    分开输出并标 "THIS machine only"。**不要**把两者混成一张「谁在做什么」
+    的表——那会让人以为缺席就是没人在动。
 
 ## 3. 常用命令
 

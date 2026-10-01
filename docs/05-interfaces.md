@@ -264,7 +264,7 @@ pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
           |archive|restore|delete|history|set-parent
 pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
-          |tasks|set-parent|set-owner|match-path|history
+          |tasks|set-parent|set-owner|match-path|history|activity
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history   （attach/detach 支持 --area）
 pjt interface init|list|show|check|sync     （接口契约：固定模板的 markdown）
 pjt member add|list|show|edit|map-git|deactivate|activate|workload|activity|use
@@ -297,6 +297,25 @@ pjt graph [tasks|milestone <id>|projects]
 `pjt status` 的 `computed blocked` 每一行内联显示归属（Area 名 · Milestone 标题），
 但**不列举全部 Area** —— 归属信息只出现在 blocked 条目上。
 裸 `pjt git`（不带子命令）打印 Git 感知可用性与 project root / git root 的关系。
+
+#### Area 活跃度（V1-C）
+
+```bash
+pjt area activity [--area <name>] [--days N] [--limit N]
+```
+
+从 Git 推导，**零新增状态**。归因链：commit 的文件 → `Area.path_patterns`
+→ Area；commit 的 author name/email → `Member.git`（V1-B 的 `member map-git`）→ Member。
+任何一环匹配不上就**如实说匹配不上**（`unmapped_authors`），不猜。
+
+输出刻意分成两半，因为**信息量完全不同**：
+
+- **已提交历史**跟着 Git 走，**所有人都能看到**——这是主体
+- **未提交改动**（`local_uncommitted`）**只有本机可见**。**别人的在途工作本工具
+  看不到**，所以它被单独标注为 "THIS machine only"，避免让人以为
+  「没出现在这里就是没人动」
+
+没有 `path_patterns` 的 Area 列为 `bound=false`，代码无法映射到它，会被提示。
 
 #### link 的机器本地路径（§7）
 

@@ -9,6 +9,7 @@ from rich.tree import Tree
 
 from project_tool.cli.common import ExpectedRev, console, execute, sid
 from project_tool.cli.render import (
+    render_area_activity,
     render_area_list,
     render_area_matches,
     render_area_owners,
@@ -241,4 +242,20 @@ def area_set_owner(
         "area.set_owner",
         {"area_id": area_id, "add": add, "remove": remove, "expected_rev": rev},
         render=render_area_owners,
+    )
+
+
+@area_app.command("activity")
+def area_activity(
+    ctx: typer.Context,
+    days: Annotated[int, typer.Option("--days", help="Look back this many days")] = 7,
+    area: Annotated[str | None, typer.Option("--area", help="Restrict to one area")] = None,
+    limit: Annotated[int, typer.Option("--limit", help="Max commits to scan")] = 200,
+) -> None:
+    """Show who recently touched which area (derived from Git, no extra state)."""
+    execute(
+        ctx,
+        "area.activity",
+        {"days": days, "area": area, "limit": limit},
+        render=render_area_activity,
     )

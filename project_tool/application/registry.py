@@ -92,6 +92,9 @@ def build_registry(service) -> dict[str, MethodSpec]:
             "area.match_path", areas.area_match_path, False, "area", "areas matching a path"
         ),
         MethodSpec("area.history", areas.area_history, False, "area", "area event history"),
+        MethodSpec(
+            "area.activity", areas.area_activity, False, "area", "recent git activity per area"
+        ),
         # task
         MethodSpec("task.create", tasks.task_create, True, "task", "create task"),
         MethodSpec("task.get", tasks.task_get, False, "task", "read task"),

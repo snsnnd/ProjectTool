@@ -1,4 +1,4 @@
-workdir: /tmp/pjt-v1b-efw-br34gepm
+workdir: /tmp/pjt-v1b-efw-39obsifg
 efw:     /mnt/d/framework/new/efw
 ===== 1. REAL EFW: read-only Git awareness =====
 
@@ -41,8 +41,8 @@ efw:     /mnt/d/framework/new/efw
   => 三个值与本轮开始前一致（见 v1a-evidence/00-efw-pollution-check.txt）
 
 ===== 2. TEMP COPY: Area 目录绑定 + commit 关联 =====
-  copy          : /tmp/pjt-v1b-efw-br34gepm/framework/new/efw
-  git work_tree : /tmp/pjt-v1b-efw-br34gepm/framework
+  copy          : /tmp/pjt-v1b-efw-39obsifg/framework/new/efw
+  git work_tree : /tmp/pjt-v1b-efw-39obsifg/framework
   subdir        : new/efw
 
 --- 2.1 给 Area 绑 path_patterns（V1-B 新能力，可选） ---
@@ -66,25 +66,25 @@ efw:     /mnt/d/framework/new/efw
 
 --- 2.4 commit trailer -> 任务关联（约定：PJT-Task: TSK-…） ---
   target task: TSK-01M3R9P6  serial/tcp 回环集成测试（socat/pty）
-  commit: cbc62fe3e49d
-  git log --task -> [('cbc62fe3', ['TSK-01M3R9P687D6CQME4B9531SDMP'])]
+  commit: 8544e8c4d085
+  git log --task -> [('8544e8c4', ['TSK-01M3R9P687D6CQME4B9531SDMP'])]
 
 --- 2.5 git.link-commit -> git_commit Artifact（只写 .pjt） ---
   created   : True
-  artifact  : ART-01M3TTJA  kind=git_commit  locator=cbc62fe3e49d
+  artifact  : ART-01M3TZBV  kind=git_commit  locator=8544e8c4d085
   tasks     : ['TSK-01M3R9P687D6CQME4B9531SDMP']
   幂等重跑  : created=False  same_artifact=True
   仓库 HEAD 不变 : True
   仓库 reflog 不变: True
 
 --- 2.6 task.related_artifacts 现在含 commit 引用 ---
-    git_commit   cbc62fe3e49d     add serial/tcp loopback coverage
+    git_commit   8544e8c4d085     add serial/tcp loopback coverage
 
 --- 2.7 git_commit artifact 的 verify（git adapter 已启用） ---
-    ok       cbc62fe3e49d  resolved to cbc62fe3e49d in /tmp/pjt-v1b-efw-br34gepm/framework
+    ok       8544e8c4d085  resolved to 8544e8c4d085 in /tmp/pjt-v1b-efw-39obsifg/framework
 
 --- 2.8 事件 ---
-    git.commit_linked    {"author": "V1B Dogfood", "created": true, "sha": "cbc62fe3e49d1651f4b6c841ef8b0abca0348ca8", "short_sha": "cbc62fe3e49d", "task_id": "TSK-01M3R9P687D6CQME4B9531SDMP"}
+    git.commit_linked    {"author": "V1B Dogfood", "created": true, "sha": "8544e8c4d0852f5ac85d46318778d8c70606ac51", "short_sha": "8544e8c4d085", "task_id": "TSK-01M3R9P687D6CQME4B9531SDMP"}
 
 --- 2.9 零写入证明：git 操作前后工程源码树 sha256 对比 ---
   TREE HASH: IDENTICAL  => git 操作只写了 .pjt/**，一个工程文件都没碰
@@ -95,4 +95,4 @@ efw:     /mnt/d/framework/new/efw
   WARNING  member.roles  non-standard role(s): maintainer; known roles: leader, member, viewer
   ok=True objects=33 errors=0 warnings=2
 
-done. workdir kept: /tmp/pjt-v1b-efw-br34gepm
+done. workdir kept: /tmp/pjt-v1b-efw-39obsifg

@@ -288,6 +288,25 @@ supersede 语义：`DEC-A` 取代 `DEC-B` 时，B.status → `superseded`，A.su
 - Area **不进入** `pjt status`（避免信息过载），只在 `task show` / `task list --area` /
   `graph project` 中出现。
 
+### 4.7b' Area 活跃度（V1-C：纯推导视图，不是数据）
+
+`pjt area activity` **不写任何东西**，每次都从 Git 重新推导：
+
+```text
+git log --name-only --since=N.days.ago
+   -> 每个 commit 的文件列表
+   -> Area.path_patterns 匹配出 Area
+   -> author name/email 匹配 Member.git 得出人
+```
+
+- **已提交历史所有人可见**（跟着 Git 走）；**未提交改动只有本机可见**。
+  工具**无法**看到别人的在途工作，所以输出必须分开标注，不能把两者混成一张表
+  让人误读。详见 `docs/05-interfaces.md` 的 Area 活跃度一节。
+- `Member.git` 映射缺失时列入 `unmapped_authors` 并提示去跑 `member map-git`，
+  **不猜**是谁提交的。
+- 没有 `path_patterns` 的 Area 报 `bound=false`：代码根本没法映射到它，
+  这不是错误，是提醒你补 pattern。
+
 ### 4.7c 接口契约（V1-C：固定模板的 markdown）
 
 **不是一等对象。** 这是刻意的设计选择，值得说明理由：

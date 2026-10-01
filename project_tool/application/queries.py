@@ -216,3 +216,231 @@ def member_workload(ctx, member_id: str) -> dict[str, Any]:
         "total": len(owned),
         "by_status": by_status,
     }
+
+
+# ==================================================================== Area 活跃度
+
+
+def _member_by_git_identity(members: list[dict[str, Any]]) -> dict[str, str]:
+    """git author name / email -> member id。
+
+    依赖 V1-B 的 `Member.git`（`pjt member map-git` 填的）。没映射的 author
+    会原样出现在 `unmapped_authors` 里，让人知道该去补映射，而不是让 commit
+    变成「某个不明来源的人」。
+    """
+    table: dict[str, str] = {}
+    for record in members:
+        member_id = str(record.get("id") or "")
+        if not member_id:
+            continue
+        identity = record.get("git") or {}
+        for name in identity.get("names") or []:
+            table[str(name).strip().lower()] = member_id
+        for email in identity.get("emails") or []:
+            table[str(email).strip().lower()] = member_id
+    return table
+
+
+def area_activity(ctx, days: int = 7, limit: int = 200, area=None) -> dict[str, Any]:
+    """最近谁在哪个 Area 里动代码（**从 Git 推导，零新状态**）。
+
+    ## 两半的信息量完全不同，必须分开呈现
+
+    - **已提交历史**：跟着 Git 走，**所有人都能看到**。这是本方法的主体。
+    - **未提交改动**：`git status` 只有本机可见。**别人的在途工作本工具看不到**，
+      所以只报本机的，并明确标注——不能让人以为「没出现在这里就是没人动」。
+
+    归因链：commit 的文件 -> `Area.path_patterns` 匹配出 Area ->
+    commit 的 author name/email -> `Member.git` 匹配出 Member。
+    任何一环匹配不上就如实说匹配不上，不猜。
+    """
+    from project_tool.domain.area_paths import match_any
+    from project_tool.integrations import git as git_integration
+
+    window = max(1, int(days))
+    areas = [
+        area_model
+        for area_model in ctx.store.list_models("area")
+        if getattr(area_model, "lifecycle", None) == Lifecycle.ACTIVE
+    ]
+    areas.sort(key=lambda item: item.name)
+    wanted = ctx.area_id(area) if area else None
+    if wanted:
+        areas = [item for item in areas if item.id == wanted]
+    bindable = [item for item in areas if item.path_patterns]
+
+    availability = git_integration.availability(ctx.paths.root)
+    result: dict[str, Any] = {
+        "available": bool(availability.get("available")),
+        "reason": availability.get("reason"),
+        "days": window,
+        "areas": [],
+        "unmapped_authors": [],
+        "unmapped_files": [],
+        "local_uncommitted": [],
+    }
+    if not availability.get("available"):
+        return result
+
+    try:
+        repo = git_integration.detect(ctx.paths.root)
+    except git_integration.GitUnavailable as exc:
+        result["reason"] = str(exc)
+        return result
+
+    # git root 相对 project root 的前缀（EFW 场景：.pjt 在 new/efw 下）
+    prefix = _project_subdir_prefix(ctx, repo)
+    commits = repo.log(limit=max(1, int(limit)), with_files=True, since=f"{window}.days.ago")
+
+    members = ctx.store.list_raw("member")
+    identity = _member_by_git_identity(members)
+    handle_by_id = {
+        str(record.get("id")): record.get("handle") for record in members if record.get("id")
+    }
+
+    per_area: dict[str, dict[str, Any]] = {}
+    unmapped_authors: dict[str, int] = {}
+    unmapped_files: set[str] = set()
+
+    for commit in commits:
+        matched: dict[str, list[str]] = {}
+        for raw_path in commit.get("files") or []:
+            relative = raw_path
+            if prefix and relative.startswith(prefix):
+                relative = relative[len(prefix):]
+            elif prefix:
+                # 文件不在 project root 下（框架根上的其它目录），与 Area 无关
+                continue
+            hit = next(
+                (item for item in bindable if match_any(item.path_patterns, relative)), None
+            )
+            if hit is None:
+                if bindable:
+                    unmapped_files.add(relative)
+                continue
+            matched.setdefault(hit.id, []).append(relative)
+
+        author_key = (commit.get("author_email") or commit.get("author") or "").strip().lower()
+        member_id = identity.get(author_key) or identity.get(
+            (commit.get("author") or "").strip().lower()
+        )
+        if member_id is None:
+            unmapped_authors[str(commit.get("author") or "?")] = (
+                unmapped_authors.get(str(commit.get("author") or "?"), 0) + 1
+            )
+
+        for area_id, files in matched.items():
+            bucket = per_area.setdefault(
+                area_id,
+                {"commits": 0, "files": set(), "people": {}},
+            )
+            bucket["commits"] += 1
+            bucket["files"].update(files)
+            if member_id:
+                person = bucket["people"].setdefault(
+                    member_id, {"commits": 0, "files": set()}
+                )
+                person["commits"] += 1
+                person["files"].update(files)
+
+    rows = []
+    for area_model in areas:
+        area_bucket = per_area.get(area_model.id)
+        people = []
+        if area_bucket:
+            for member_id, data in sorted(
+                area_bucket["people"].items(), key=lambda item: -item[1]["commits"]
+            ):
+                people.append(
+                    {
+                        "member_id": member_id,
+                        "handle": handle_by_id.get(member_id, member_id),
+                        "commits": data["commits"],
+                        "files": sorted(data["files"]),
+                    }
+                )
+        rows.append(
+            {
+                "area_id": area_model.id,
+                "name": area_model.name,
+                "owner_ids": list(area_model.owner_ids),
+                "bound": bool(area_model.path_patterns),
+                # 注意用 area_bucket：外层的 `bucket` 是遍历 commit 时的循环变量，
+                # 循环结束后仍留着最后一次的值，会让所有 Area 都变成 active
+                "active": bool(area_bucket),
+                "commits": area_bucket["commits"] if area_bucket else 0,
+                "files": sorted(area_bucket["files"]) if area_bucket else [],
+                "people": people,
+            }
+        )
+
+    result["areas"] = rows
+    result["unmapped_authors"] = [
+        {"author": author, "commits": count}
+        for author, count in sorted(unmapped_authors.items(), key=lambda i: -i[1])
+    ]
+    result["unmapped_files"] = sorted(unmapped_files)
+    result["local_uncommitted"] = _local_uncommitted(ctx, bindable, prefix)
+    result["scanned_commits"] = len(commits)
+    return result
+
+
+def _project_subdir_prefix(ctx, repo) -> str:
+    """project root 相对 git root 的 posix 前缀；同根时是空串。"""
+    root = ctx.paths.root.resolve()
+    work_tree = repo.work_tree.resolve()
+    if root == work_tree:
+        return ""
+    try:
+        return root.relative_to(work_tree).as_posix() + "/"
+    except ValueError:
+        return ""
+
+
+def _local_uncommitted(ctx, bindable, prefix: str) -> list[dict[str, Any]]:
+    """**本机**未提交改动按 Area 归类。
+
+    只有本机可见——所以调用方必须把这一段标成「仅本机」，
+    不然读者会误以为它代表了所有人。
+    """
+    from project_tool.domain.area_paths import match_any
+    from project_tool.integrations import git as git_integration
+
+    if not bindable:
+        return []
+    try:
+        repo = git_integration.detect(ctx.paths.root)
+        entries = repo.status()
+    except git_integration.GitUnavailable:
+        return []
+    buckets: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        path = entry.path
+        if prefix:
+            if not path.startswith(prefix):
+                continue
+            path = path[len(prefix):]
+        hit = next(
+            (item for item in bindable if match_any(item.path_patterns, path)), None
+        )
+        if hit is None:
+            continue
+        bucket = buckets.setdefault(hit.id, {"files": [], "codes": set()})
+        bucket["files"].append(path)
+        bucket["codes"].add(entry.status)
+    rows = []
+    for area_model in bindable:
+        # 换个变量名：上面的 bucket 已经被 setdefault 推断成 dict，
+        # 复用同名会让 mypy 认为这里在给非 Optional 赋 Optional
+        local_bucket = buckets.get(area_model.id)
+        if not local_bucket:
+            continue
+        rows.append(
+            {
+                "area_id": area_model.id,
+                "name": area_model.name,
+                "files": sorted(local_bucket["files"]),
+                "codes": sorted(local_bucket["codes"]),
+            }
+        )
+    return rows

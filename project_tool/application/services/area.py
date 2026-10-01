@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from project_tool.application import queries
 from project_tool.application.context import UNSET, ServiceContext, as_list
 from project_tool.domain.area import Area
 from project_tool.domain.area_paths import match_any, normalize_path_patterns
@@ -224,6 +225,14 @@ class AreaService:
         return self.ctx.set_lifecycle(
             "area", self.ctx.require_area_id(area_id), Lifecycle.ACTIVE, "object.restored", expected_rev
         )
+
+    def area_activity(self, days: int = 7, limit: int = 200, area=None) -> dict[str, Any]:
+        """最近谁在哪个 Area 里动代码（从 Git 推导，不新增任何状态）。
+
+        已提交历史跟着 Git 走，所有人都能看到；未提交改动**只有本机能看到**，
+        所以单独标注——不能让人以为「没出现在这里就是没人动」。
+        """
+        return queries.area_activity(self.ctx, days=days, limit=limit, area=area)
 
     def area_history(self, area_id) -> dict[str, Any]:
         area = self.ctx.load("area", self.ctx.require_area_id(area_id))

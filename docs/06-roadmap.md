@@ -173,8 +173,23 @@ task set-parent · 裸 pjt git（打印 Git 感知可用性）
 - **不把接口做成一等对象**。正文是人写的散文，塞进 JSON 只会让人绕过工具；
   diff/blame/历史 Git 已经做得比自建机制好。工具只提供模板与检查。
 
-未做：Area 活跃度视图（「谁现在正在哪个 Area 里动代码」，从 Git 推导）、
-真正的 merge 辅助、服务器权限模型。
+**第三步：Area 活跃度**（`0.5.1`）
+
+```text
+✓ pjt area activity —— 「谁最近在哪个 Area 里动代码」，纯从 Git 推导，零新状态
+  归因链：commit 的文件 -> Area.path_patterns -> Area
+          author name/email -> Member.git（V1-B 的 map-git）-> Member
+  匹配不上就列入 unmapped_authors，不猜
+```
+
+**两半信息量不同，必须分开呈现**：已提交历史跟着 Git 走、所有人都能看到；
+未提交改动**只有本机可见**——工具**看不到别人的在途工作**，所以单独标注为
+「THIS machine only」，不把两者混成一张表让人误读「没出现就是没人动」。
+
+未做：真正的 merge 辅助、服务器权限模型、`pjt area activity` 的反向
+（按人看「我在哪些块」）。
+
+demo：`python3 dogfooding/scripts/area_activity_demo.py`
 
 ### ~~V2 — 远程协作~~（❌ 已决定不做）
 

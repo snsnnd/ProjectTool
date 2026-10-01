@@ -426,6 +426,79 @@ def render_interface_check(result: dict[str, Any]) -> None:
     )
 
 
+def render_area_activity(result: dict[str, Any]) -> None:
+    """`pjt area activity`。
+
+    两半信息量不同，**必须分开呈现**：已提交历史所有人都能看到，
+    未提交改动只有本机可见。混在一起会让人以为「没出现就是没人动」。
+    """
+    if not result.get("available"):
+        console.print("[yellow]git unavailable — cannot derive area activity[/yellow]")
+        console.print(f"  [dim]{result.get('reason', '')}[/dim]")
+        return
+
+    days = result.get("days", 7)
+    scanned = result.get("scanned_commits", 0)
+    console.print(
+        f"[bold]Area activity[/bold]  [dim]last {days}d, from {scanned} commit(s)[/dim]"
+    )
+    console.print()
+
+    active = [row for row in result.get("areas") or [] if row.get("active")]
+    idle = [row for row in result.get("areas") or [] if not row.get("active")]
+
+    for row in active:
+        owners = ", ".join(sid(item) for item in row.get("owner_ids") or []) or "unassigned"
+        console.print(f"  [green]●[/green] [bold]{row['name']}[/bold]  [dim]owners: {owners}[/dim]")
+        for person in row.get("people") or []:
+            console.print(
+                f"      {person['handle']}  [dim]{person['commits']} commit(s)[/dim]"
+            )
+            for path in person["files"][:6]:
+                console.print(f"        [dim]{path}[/dim]")
+            extra = len(person["files"]) - 6
+            if extra > 0:
+                console.print(f"        [dim]… +{extra} more[/dim]")
+        if not row.get("people"):
+            console.print(
+                "      [yellow]author not mapped to a member[/yellow] "
+                "[dim](run 'pjt member map-git <handle> --git-email …')[/dim]"
+            )
+        console.print()
+
+    if idle:
+        quiet = [row["name"] for row in idle if row.get("bound")]
+        unbound = [row["name"] for row in idle if not row.get("bound")]
+        if quiet:
+            console.print(f"  [dim]no commits in {days}d: {', '.join(quiet)}[/dim]")
+        if unbound:
+            console.print(
+                f"  [yellow]no path_patterns (code cannot map to this area): "
+                f"{', '.join(unbound)}[/yellow]"
+            )
+
+    local = result.get("local_uncommitted") or []
+    console.print()
+    if local:
+        console.print(
+            "[bold]Uncommitted on THIS machine only[/bold] "
+            "[dim](others' in-flight work is invisible here)[/dim]"
+        )
+        for row in local:
+            console.print(f"  {row['name']}  [dim]{' '.join(row.get('codes') or [])}[/dim]")
+            for path in row["files"][:8]:
+                console.print(f"    [dim]{path}[/dim]")
+    else:
+        console.print("[bold]Uncommitted on THIS machine:[/bold] [dim]none in a bound area[/dim]")
+
+    unmapped = result.get("unmapped_authors") or []
+    if unmapped:
+        console.print()
+        console.print("[dim]authors with no Member.git mapping:[/dim]")
+        for item in unmapped:
+            console.print(f"  {item['author']}  [dim]{item['commits']} commit(s)[/dim]")
+
+
 def render_area_owners(result: dict[str, Any]) -> None:
     owners = list(result.get("owner_ids") or [])
     if not owners:

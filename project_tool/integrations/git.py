@@ -170,28 +170,47 @@ class GitRepo:
         limit: int = 50,
         path_filter: str | None = None,
         trailer: str | None = None,
+        with_files: bool = False,
+        since: str | None = None,
     ) -> list[dict[str, Any]]:
-        """提交历史（只读）。`trailer` 用 `--grep` 过滤 message。"""
-        fmt = "--format=%H%x1f%an%x1f%aI%x1f%s"
-        args = ["log", f"--max-count={max(1, int(limit))}", "--no-decorate", fmt]
+        """提交历史（只读）。`trailer` 用 `--grep` 过滤 message。
+
+        `with_files` 加 `--name-only`：Area 活跃度归因需要「这个 commit 碰了哪些
+        文件」。用 `\x01` 给每个 commit 加前缀，这样带文件列表也能稳定切分
+        （否则文件行和 header 行混在一起没法区分）。
+        """
+        head = "\x01" if with_files else ""
+        fmt = f"--format={head}%H%x1f%an%x1f%ae%x1f%aI%x1f%s"
+        args = ["log", f"--max-count={max(1, int(limit))}", "--no-decorate"]
+        if since:
+            args.append(f"--since={since}")
+        if with_files:
+            args.append("--name-only")
+        args.append(fmt)
         if trailer:
             args += [f"--grep={trailer}"]
         if path_filter:
             args += ["--", path_filter]
         commits: list[dict[str, Any]] = []
-        for line in self.run(*args).splitlines():
-            if not line.strip():
+        chunks = self.run(*args).split("\x01") if with_files else self.run(*args).splitlines()
+        for chunk in chunks:
+            lines = [line for line in chunk.splitlines() if line.strip()]
+            if not lines:
                 continue
-            parts = line.split("\x1f")
-            if len(parts) < 4:
+            parts = lines[0].split("\x1f")
+            if len(parts) < 5:
                 continue
+            files = [line for line in lines[1:]]
             commits.append(
                 {
                     "sha": parts[0],
                     "short_sha": parts[0][:8],
                     "author": parts[1],
-                    "authored_at": parts[2],
-                    "subject": parts[3],
+                    "author_email": parts[2],
+                    "authored_at": parts[3],
+                    "files": files,
+                    # 字段顺序是 sha / an / ae / aI / s —— subject 是第 5 段
+                    "subject": parts[4],
                 }
             )
         return commits
