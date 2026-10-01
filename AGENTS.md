@@ -20,7 +20,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 提交线：`6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding 报告
   → `779a886` 统一 expected_rev → `d73a492` Area → `52e1a9f` Artifact
   → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层。
-- 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（558 passed）；
+- 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（全绿）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
   **Artifact** / Link；Service **123** 个 method，CLI 命令 **117** 个（+ 12 个分组），

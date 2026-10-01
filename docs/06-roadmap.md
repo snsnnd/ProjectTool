@@ -105,7 +105,7 @@ Area 唯一名约束、Task 多 Area、Search / 索引。
 
 不新增任何领域概念。两条线：
 
-**CLI 触达率补到 100%**。registry 里有 22 个 method 此前没有任何 CLI 入口——
+**CLI 触达率大幅补齐**。registry 里有 12 个 method 此前没有任何 CLI 入口——
 它们早就存在于 service + registry，只是摸不到。补上：
 
 ```text
@@ -131,7 +131,7 @@ task set-parent · 裸 pjt git（打印 Git 感知可用性）
 - `pjt status` 的 computed blocked 内联显示 Area 名与 Milestone 标题；
   **仍不列举全部 Area**（V1-A 的决定），归属只出现在 blocked 条目上
 
-### V1-C — 多人并发（进行中，`0.4.1`）
+### V1-C — 多人并发（四步全部完成，0.4.1 → 0.6.x）
 
 协作形态按**最多 20 人**设计。20 人与 handover 里写的「2 个并发写者」不是一个量级，
 所以这一阶段的第一件事不是写合并辅助，而是**先量出真实的冲突面**
@@ -161,7 +161,7 @@ task set-parent · 裸 pjt git（打印 Git 感知可用性）
   1 个 owner = 私有块，多个 = 公共接口区（复数就是「公共」，不需要 shared 字段）
 ✓ Member.roles 建议词汇表；**不做本地权限门禁**——权限留给服务器
 ✓ 接口契约 = 固定模板的 markdown + Artifact 注册（不是一等对象，见理由）
-  pjt interface init | list | show | check | sync
+  pjt interface init | register | list | show | check | sync
   front-matter 机器可读（为将来自动索引），必需章节是强制沟通清单
   check 只报告不改写，有 error 退出码 1 -> 可当 CI 门禁
 ```
@@ -255,11 +255,11 @@ KC 原本依赖 Project Server 提供 organization / project 映射、visibility
 | application（service/registry/context/services/queries/doctor） | ✓ |
 | graph（dependency/project_graph） | ✓ |
 | cli（main/common/render + 各域模块 + --json/--porcelain/--as） | ✓ |
-| tests（pytest，120 cases，含故障注入/恢复幂等/锁） | ✓ |
+| tests（pytest，含故障注入/恢复幂等/锁/多 agent 并发/Windows 共享冲突） | ✓ |
 | ruff + mypy + CI（Ubuntu/Windows + Python 3.12） | ✓ |
-| web/（React） | V1 |
-| api/（FastAPI） | V1 |
-| sync/ | V2 |
+| ~~web/（React）~~ | ❌ **不做**（无服务器，见 §V2） |
+| ~~api/（FastAPI）~~ | ❌ **不做**（同上） |
+| ~~sync/~~ | ❌ **不做**（协作走 Git） |
 
 ## 4. 第一验证项目（已完成第一轮）
 

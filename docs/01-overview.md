@@ -52,9 +52,10 @@ Project Tool 负责：
 
 ```text
 Goal / Milestone / Task / Member（项目内身份）
-Update / Decision / Artifact（V1）/ Project Link
+**Area**（稳定模块/工作领域，owner 分区）/ Update / Decision / Artifact / Link
+接口契约（工作树里的 markdown + Artifact 引用，不是一等对象）
 Event History / Dependency / Project Graph
-本地 Web UI（V1-B，尚未实现）。**不做远程同步**（docs/06 §V2）
+**不做** Web UI / 远程同步 / 账号（docs/06 §V2）。可视化由 KC 侧生成静态报告
 ```
 
 Project Tool 不负责：
@@ -119,4 +120,7 @@ CLI 模式（当前唯一）
 | [06-roadmap.md](06-roadmap.md) | V0–V3 路线图与验收标准 |
 | [07-v0.1-audit.md](07-v0.1-audit.md) | V0.1 审计发现与处理结果 |
 | [08-events.md](08-events.md) | Event contract |
-| [09-handover.md](09-handover.md) | 交接文档（状态 / 约定 / V1 第一步）|
+| [09-handover.md](09-handover.md) | 交接文档（状态 / 不可破坏的约定 / 排障）|
+| [09-v1a-design.md](09-v1a-design.md) | V1-A 设计记录（Area / Artifact / 并发契约 / 迁移）|
+| [10-kc-integration.md](10-kc-integration.md) | KC 接入参考（初始化 / 分发 / 身份 / 权限边界）|
+| [../AGENTS.md](../AGENTS.md) | 给接手 agent 的速查与禁区 |

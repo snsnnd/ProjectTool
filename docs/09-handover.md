@@ -19,7 +19,7 @@ Git tracks code. Project Tool tracks the project.
 |---|---|
 | 版本 | `0.6.7`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
 | 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 → `d1882aa` CLI 补完 → `c0066aa` 派生缓存治理 → `74249ad` Area owner + 接口契约 → `26b5718` Area 活跃度 → `5ebcaec` KC 打包面 → `3db3c70`/`eaf481f` task claim / `task next` → `41f6581`~`81cff1e` Windows 并发正确性 → `8f75e7a` 全项目复查修复 |
-| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` **561 passed** · CI（Ubuntu+Windows, Py3.12）✅ |
+| 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` 全绿 · CI（Ubuntu+Windows, Py3.12）✅ |
 | 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`；V1-C：`dogfooding/scripts/` 下 `multiwriter_probe` / `area_activity_demo` / `interface_check_probe` / `multiagent_demo` |
 | Service API | 显式 registry，**123 个 method**；CLI **117 个命令** + 12 个分组，**112 个 method 有 CLI 入口**（见下方缺口说明） |
 | 已实现 | Git 感知（只读）· 派生缓存不进 Git · **Area owner**（`area set-owner`）· **接口契约**（`interface init/register/check/sync`）· **Area 活跃度**（`area activity`）· **多 agent 认领**（`task next/claim/release`）· **Windows 共享冲突重试** |
@@ -40,7 +40,7 @@ service，但用户手边没有命令。补它们是新增功能，不是收尾�
 ```bash
 cd /path/to/ProjectTool
 uv sync
-uv run pytest                          # 561 passed
+uv run pytest                          # 用例数以实际输出为准
 uv run ruff check . && uv run mypy project_tool
 
 # 在临时目录体验完整流程（不要污染别人的真实项目）
@@ -71,7 +71,7 @@ ProjectTool/
 │   ├── graph/           # 依赖/层级/进度推导
 │   ├── integrations/    # filesystem（原子写、fsync）
 │   └── cli/             # Typer：main/common/render + 各域模块
-├── tests/               # 29 个测试文件，561 cases
+├── tests/               # 30 个测试文件（含 conftest）
 ├── docs/                # 01–10（09-handover = 本文件，10-kc-integration = KC 接入参考）
 ├── dogfooding/          # EFW 真实项目验证报告 + 证据 + 可复现脚本
 ├── pyproject.toml       # uv；dev 依赖 pytest/ruff/mypy；ruff+mypy 配置

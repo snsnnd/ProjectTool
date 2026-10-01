@@ -68,7 +68,7 @@ my-project/
 | 机器可读命令面（`system.cli`，KC 靠它发现可驱动的命令） | ✅ |
 | CLI：117 个命令 + 12 个分组 | ✅ |
 | 真实项目 dogfooding（EFW Studio，两轮，零源码污染） | ✅（[V0.1](dogfooding/report.md) · [V1-A](dogfooding/v1a-report.md)） |
-| ruff + mypy + **558** tests + CI（Ubuntu + Windows, Py3.12） | ✅ |
+| ruff + mypy + pytest + CI（Ubuntu + Windows, Py3.12） | ✅ |
 | Search / 全文检索 | ⏳ 未排期 |
 | Remote / Sync / Accounts / Webhook / Web UI | ❌ **不做**（见上方边界） |
 
@@ -265,7 +265,7 @@ pjt project    edit|show
 uv sync                # 安装依赖（含 dev）
 uv run ruff check .    # 静态检查
 uv run mypy project_tool
-uv run pytest          # 558 tests
+uv run pytest          # 具体用例数以实际输出为准
 uv run pjt --help      # 运行 CLI
 ```
 
