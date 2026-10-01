@@ -1,0 +1,44 @@
+# 临时诊断：把 Windows 的 pytest 失败输出推到 ci-diagnostics 分支。
+# job 日志需要 auth 读不到，而匿名 jobs API 只暴露 step 名字 —— 拿不到 traceback。
+# 定位完就删掉这个 workflow 和分支。
+name: Diagnose
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  win:
+    name: "win :: full suite"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Run
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          uv run pytest -rf --tb=short -p no:cacheprovider tests/ 2>&1 |
+            Tee-Object -FilePath pytest-output.txt
+          $code = $LASTEXITCODE
+          "pytest exit code: $code" | Out-File -FilePath pytest-output.txt -Append
+          if ($code -ne 0) { exit $code }
+      - name: Publish diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          git config user.name ci
+          git config user.email ci@example.com
+          git checkout -b ci-diagnostics
+          git add -f pytest-output.txt
+          git commit -m "diagnostics: windows failure output"
+          git push -f origin ci-diagnostics
+          "published run ${{ github.run_id }}" | Out-File -FilePath published.txt -Append
+          git add -f published.txt
+          git commit -m "diagnostics: run id"
+          git push -f origin ci-diagnostics
