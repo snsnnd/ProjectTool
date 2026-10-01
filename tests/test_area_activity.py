@@ -60,6 +60,19 @@ def repo(tmp_path):
     return root
 
 
+def git_init(path):
+    """建一个带身份的 git 仓库。
+
+    必须显式设 user.name/user.email —— CI 上没有全局 gitconfig，
+    `git commit` 会直接拒绝（本地有全局配置，所以这个坑只在 CI 暴露）。
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    git(path.parent, "init", "-q", "-b", "main", str(path))
+    git(path, "config", "user.email", "t@example.com")
+    git(path, "config", "user.name", "T")
+    return path
+
+
 def commit_as(root, name, email, message, relpath):
     target = root / relpath
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -254,9 +267,7 @@ def test_activity_on_a_repo_with_no_commits_does_not_crash(tmp_path):
     `detect()` 做了保护，于是抛 traceback。**空历史不等于 git 不可用**——
     应该照常返回「所有 Area 都没活动」。
     """
-    root = tmp_path / "fresh"
-    root.mkdir()
-    git(root.parent, "init", "-q", "-b", "main", str(root))
+    root = git_init(tmp_path / "fresh")
     init_project(root, name="Fresh")
     svc = ProjectService(open_project(root))
     svc.call("area.create", {"name": "core", "path_patterns": ["src/**"]})
@@ -269,9 +280,7 @@ def test_activity_on_a_repo_with_no_commits_does_not_crash(tmp_path):
 
 
 def test_cli_activity_on_a_fresh_repo_exits_cleanly(tmp_path):
-    root = tmp_path / "fresh2"
-    root.mkdir()
-    git(root.parent, "init", "-q", "-b", "main", str(root))
+    root = git_init(tmp_path / "fresh2")
     init_project(root, name="Fresh2")
     result = invoke(["-C", str(root), "area", "activity"])
     assert result.exit_code == 0, result.output
@@ -281,9 +290,7 @@ def test_cli_activity_on_a_fresh_repo_exits_cleanly(tmp_path):
 def test_has_commits_is_false_on_an_empty_repo(tmp_path):
     from project_tool.integrations.git import detect
 
-    root = tmp_path / "empty"
-    root.mkdir()
-    git(root.parent, "init", "-q", "-b", "main", str(root))
+    root = git_init(tmp_path / "empty")
     assert detect(root).has_commits() is False
     (root / "f.txt").write_text("x\n", encoding="utf-8")
     git(root, "add", "-A")
