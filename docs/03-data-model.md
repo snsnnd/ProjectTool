@@ -356,7 +356,7 @@ git log --name-only --since=N.days.ago
 ---
 name: store.updateModel
 kind: store_api          # **由本项目自定义**，工具不校验、不设默认值
-status: draft            # draft | review | agreed | deprecated
+status: draft            # 由本项目自定义，工具不校验取值（默认 draft）
 area: core               # **Area 名字**，不是 ARA- id —— 这份文档是给人看的
 owners: [jichao]
 consumers: [ui, dataflow]
@@ -378,11 +378,13 @@ version: 1
 - 必填字段只有 `name` / `status` / `area`（**`kind` 不在其中**——它由这个项目的人
   定义，工具不校验也不设默认值，不关心分类的项目可以完全不填；
   `docs/05` §5 记录了第一版把它设成封闭枚举 `module_api | store_api | …` 是错的）。
-  `consumers` **按 status 分级**：`draft` 可以空着，
-  `review` / `agreed` / `deprecated` 必须写清消费者。
-  （第一版把 `consumers` 也设成必填，结果 `interface init` 不带 `--consumer`
-  直接失败——而「还没想清楚谁在用」正是 draft 阶段的常态。**没人填得上的必填字段
-  比没有更糟**，它只会训练大家绕过检查。）
+  `status` 的**取值也自由**（`pjt interface init --status`，默认 `draft`），
+  只校验非空。`draft|review|agreed|deprecated` 只是建议值，见 `docs/05` §5。
+  `consumers` **不再强制**：空着报 **warning** 而非 error。
+  （这条规则翻过两次：最初设成必填 → `interface init` 不带 `--consumer` 直接失败；
+  改成按 `status` 分级 → 因为 `consumers` **根本不驱动任何工具逻辑**
+  （`linked`/`same_area`/`mentioned` 三路都不看它），等于在校验一张工具从不读
+  的表。**没人填得上的必填字段比没有更糟**，它只会训练大家绕过检查。）
 - `interface check` 兑现「固定模板」的可检查性：未知 status、缺必填字段、
   缺必需章节 → error；空章节 → warning。**只报告，不改写**——工具替人改契约
   比不检查更糟。有 error 时退出码 1，可以直接当 CI 门禁。

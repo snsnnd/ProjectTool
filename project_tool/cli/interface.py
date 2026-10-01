@@ -50,6 +50,14 @@ def interface_init(
     consumer: Annotated[
         list[str] | None, typer.Option("--consumer", help="Consuming area/module (repeatable)")
     ] = None,
+    status: Annotated[
+        str,
+        typer.Option(
+            "--status",
+            help="Lifecycle state, **chosen by this project** "
+            "(default draft). Not validated by the tool.",
+        ),
+    ] = "draft",
     summary: Annotated[str, typer.Option("--summary", help="One-line purpose")] = "",
     force: Annotated[bool, typer.Option("--force", help="Overwrite an existing file")] = False,
 ) -> None:
@@ -64,6 +72,7 @@ def interface_init(
             "path": path,
             "owners": owner,
             "consumers": consumer,
+        "status": status,
             "summary": summary,
             "force": force,
         },

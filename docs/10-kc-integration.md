@@ -82,15 +82,19 @@ Artifact（locator 指向文件路径）：
 docs/interfaces/<slug>.md
 ```
 
-front-matter：`name` / `status`（`draft|review|agreed|deprecated`）/ `area` /
+front-matter：`name` / `status`（**自由字符串**，默认 `draft`）/ `area` /
 `kind`（**由项目自定义，工具不校验**）/ `owners` / `consumers` / `version`。
 
 > ⚠️ 必填只有 `name` / `status` / `area`——**`kind` 不在其中**（不关心分类的项目
-> 可以完全不填）。而 `status` 是**唯一仍是封闭词汇的字段**，且**是否该自由化
-> 尚未决策**（见 §7）。下面那段可视化建议是在「词表保持封闭」这个前提下写的。
+> 可以完全不填）。`status` 的**取值由项目自定义**，工具只校验非空、不校验取值。
 >
-> **做"接口状态"可视化的话，入口是这两个**：`status == "agreed"` 表示已谈定，
-> `consumers` 表示谁在依赖。正文是散文，**不要试图解析**。
+> ⚠️ 所以下面这段可视化建议**依赖 KC 自己约定一套词表**：工具不认得
+> 「已谈定」是什么，`agreed` 只是 `SUGGESTED_STATUSES` 里的一个建议值。
+> KC 要么沿用建议值（`draft|review|agreed|deprecated`），要么在自己的
+> 配置里声明哪套词表算「已谈定」——**不要假设工具会替你判断**。
+>
+> **入口**：`status` 表示成熟度，`consumers` 表示谁在依赖。正文是散文，
+> **不要试图解析**。`consumers` 是 warning 级别的提醒，不是阻塞项。
 > 另外 `owners` / `consumers` / `version` 工具**不维护**——它只读 front-matter、
 > 只同步 `area`（和 `kind`），所以别把它们当成会由工具托管的字段。
 

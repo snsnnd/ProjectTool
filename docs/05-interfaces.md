@@ -331,10 +331,18 @@ protocol | other`）并默认 `module_api` —— 那是把**工具的猜测**�
 现在 `--kind` 是自由字符串、无默认值、不参与校验，不填也合法。
 将来做自动索引时，有值的自然被归类，没有的就当没分类。
 
-唯一仍是封闭词汇的是 `status`（`draft` / `review` / `agreed` / `deprecated`），
-因为「什么时候算谈完」这条规则依赖它（`review` 之后必须有 `consumers`）。
-如果某个项目的流程不是这样，就得改 `project_tool/domain/interfaces.py` 里的
-`STATUSES` —— 这是**已知待决项**，还没做成项目级配置。
+`status` 现在也是**自由字符串**了（`pjt interface init --status`，默认 `draft`）。
+当初它保持封闭，理由是「什么时候算谈完」这条规则依赖它——`review` 之后必须有
+`consumers`。但那条规则本身就站不住：`consumers` **不驱动任何工具逻辑**
+（`linked` / `same_area` / `mentioned` 三路都不看它），所以强制它只是在校验
+一张工具从不读的表；而且第一版把 `consumers` 设成必填时，
+`interface init` 不带 `--consumer` 直接失败，「还没想清楚谁在用」恰恰是草稿
+阶段的常态——没人填得上的必填字段只会训练大家绕过检查。
+
+所以：取值自由、只校验非空；`consumers` 空着从 error 降为 **warning**。
+`draft|review|agreed|deprecated` 仍作为 `SUGGESTED_STATUSES` 建议值保留
+（表达的是跨项目通用的事实），要做自动索引的项目自己知道哪个值算「已谈定」，
+从 front-matter 读即可——工具不该替它定义。
 
 #### link 的机器本地路径（§7）
 

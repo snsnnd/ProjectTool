@@ -182,6 +182,7 @@ class InterfaceService:
         path=None,
         owners=None,
         consumers=None,
+        status: str = "draft",
         summary: str = "",
         change_rule: str = "",
         force: bool = False,
@@ -229,6 +230,7 @@ class InterfaceService:
             area=area_name,
             owners=owner_refs,
             consumers=consumer_refs,
+            status=status or "draft",
             summary=optional_text(summary, "summary"),
             change_rule=change_rule,
         )

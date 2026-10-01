@@ -204,16 +204,39 @@ def test_consumers_are_not_required_while_drafting():
     assert [f for f in iface.check_document(draft) if f.level == "error"] == []
 
 
-def test_consumers_become_required_at_review_time():
-    text = iface.render_template("x.y", area="core").replace("status: draft", "status: review")
-    messages = [f.message for f in iface.check_document(text)]
-    assert any("consumers is required" in item for item in messages)
+def test_consumers_is_never_required_anymore(tmp_path):
+    """曾经按 status 分级强制（review 起必填），现已随 status 自由化移除。
+
+    保留这个测试是为了钉住「不再强制」这件事本身——它是刻意移除的，
+    不是漏改。`consumers` 不驱动任何工具逻辑，强制它只会卡住草稿阶段。
+    """
+    findings = iface.check_document(iface.render_template("x.y", area="core", status="agreed"))
+    assert not [f for f in findings if f.level == "error"], findings
+    assert any(f.level == "warning" and "consumers" in f.message for f in findings), findings
 
 
-def test_unknown_status_is_an_error():
-    text = iface.render_template("x.y", area="core").replace("status: draft", "status: pending")
+def test_unknown_status_is_accepted():
+    """`status` 自由化：工具不校验取值，只校验非空。
+
+    曾经 `pending` 会报 "unknown status"。现在项目想叫什么就叫什么——
+    只有非空才是硬要求，见 `test_missing_required_field_is_an_error`。
+    """
+    for value in ("pending", "frozen", "stable", "内部评审中"):
+        text = iface.render_template("x.y", area="core", status=value)
+        assert f"status: {value}" in text
+        assert not [
+            f for f in iface.check_document(text) if "status" in f.message and f.level == "error"
+        ], value
+
+
+def test_empty_status_is_still_an_error():
+    """自由化不等于放行空值：没写状态就无法判断这份契约能不能依赖。"""
+    text = "\n".join(
+        line for line in iface.render_template("x.y", area="core").splitlines()
+        if not line.startswith("status:")
+    )
     messages = [f.message for f in iface.check_document(text)]
-    assert any("unknown status 'pending'" in item for item in messages)
+    assert any("missing required field: status" in item for item in messages)
 
 
 def test_missing_required_field_is_an_error():
@@ -405,14 +428,19 @@ def test_cli_check_exits_nonzero_so_it_can_gate_ci(svc, root):
     invoke(["-C", str(root), "interface", "init", "a.b", "--area", "core"])
     assert invoke(["-C", str(root), "interface", "check"]).exit_code == 0
 
+    # 触发 error 用「缺必填字段」——consumers 自由化后不再是 error 来源
     path = root / "docs" / "interfaces" / "a.b.md"
     path.write_text(
-        path.read_text(encoding="utf-8").replace("status: draft", "status: review"),
+        "\n".join(
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("area:")
+        ),
         encoding="utf-8",
     )
     result = invoke(["-C", str(root), "interface", "check"])
     assert result.exit_code == 1
-    assert "consumers is required" in result.output
+    assert "missing required field: area" in result.output
 
 
 def test_interface_show_accepts_the_name_that_list_displays(svc, root):
@@ -697,3 +725,84 @@ def test_cli_related_interfaces(root, svc):
     payload = json.loads(result.output)["result"]
     assert payload["count"] == 1
     assert payload["interfaces"][0]["name"] == "store.updateModel"
+
+
+# ================================================================== status 自由化
+
+
+def test_interface_status_accepts_any_project_chosen_value(tmp_path):
+    """`status` 由项目自己定义，工具只校验非空。
+
+    第一版把它写成封闭四值（还默认 `module_api` 给 `kind`），那是把工具的
+    猜测焊进数据——EFW 就需要 `kind: serial_frame` 这种猜不到的值，同一个
+    项目把状态叫 `frozen` / `stable` 也完全合理。
+    """
+    setup = ProjectService(init_project(tmp_path, name="FreeStatus"))
+    setup.call("area.create", {"name": "core"})
+
+    created = setup.call(
+        "interface.init",
+        {"name": "net.SerialFrame", "area": "core", "kind": "serial_frame", "status": "frozen"},
+    )
+
+    checked = setup.call("interface.check", {"artifact": created["id"]})
+    assert checked["ok"] is True, checked
+    assert checked["interfaces"][0]["status"] == "frozen"
+
+
+def test_interface_status_defaults_to_draft(tmp_path):
+    """`draft` 是跨项目通用的事实（这是草稿），保留作默认值但不强制。"""
+    setup = ProjectService(init_project(tmp_path, name="DefaultStatus"))
+    setup.call("area.create", {"name": "core"})
+
+    created = setup.call("interface.init", {"name": "store.updateModel", "area": "core"})
+    checked = setup.call("interface.check", {"artifact": created["id"]})
+    assert checked["interfaces"][0]["status"] == "draft"
+
+
+def test_missing_consumers_is_a_warning_not_an_error(tmp_path):
+    """`consumers` 不再被强制。
+
+    它**不驱动任何工具逻辑**——「哪些契约和这个 task 相关」走 `linked` /
+    `same_area` / `mentioned` 三路，都不看 `consumers`，它只是被读出来展示。
+    校验一张工具从不读的表唯一效果是卡人，而项目早就记过这个教训：第一版把
+    `consumers` 设成必填，`interface init` 不带 `--consumer` 直接失败。
+    """
+    setup = ProjectService(init_project(tmp_path, name="NoConsumer"))
+    setup.call("area.create", {"name": "core"})
+
+    created = setup.call("interface.init", {"name": "lonely.Contract", "area": "core"})
+    checked = setup.call("interface.check", {"artifact": created["id"]})
+
+    assert checked["errors"] == 0, checked
+    # 但仍要提醒：填了有展示价值（改动时知道该通知谁）
+    messages = [f["message"] for row in checked["interfaces"] for f in row["findings"]]
+    assert any("consumers" in message for message in messages), messages
+
+
+def test_front_matter_never_writes_a_duplicated_kind_line(tmp_path):
+    """`dump_front_matter` 对空值是跳过的，所以只有 kind 为空时才补注释占位。
+
+    早先无条件插入，于是**任何带 `--kind` 的调用都写出两行 `kind:`**。
+    这个 bug 只在真正看文件内容时才会发现——`interface check` 读的是
+    front-matter 解析结果，重复行不改变解析出来的值。
+    """
+    setup = ProjectService(init_project(tmp_path, name="DupKind"))
+    setup.call("area.create", {"name": "core"})
+
+    with_kind = setup.call(
+        "interface.init", {"name": "net.SerialFrame", "area": "core", "kind": "serial_frame"}
+    )
+    without_kind = setup.call("interface.init", {"name": "plain.One", "area": "core"})
+
+    def kind_lines(created):
+        text = (tmp_path / created["locator"]).read_text(encoding="utf-8")
+        front = text.split("---")[1]
+        return [line for line in front.splitlines() if line.startswith("kind:")]
+
+    # 有 kind：一个值行，且没有注释占位
+    assert kind_lines(with_kind) == ["kind: serial_frame"]
+    # 没 kind：不写值行，只留一行注释告诉人「这字段由项目自定」
+    assert kind_lines(without_kind) == []
+    commented = (tmp_path / without_kind["locator"]).read_text(encoding="utf-8")
+    assert commented.count("# kind:") == 1

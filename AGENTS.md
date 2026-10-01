@@ -86,9 +86,14 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     不是 error——老项目可能有自由 role，不能因此判 corrupted）。谁改了什么一律
     记进 append-only 事件，供人和服务器去审。
 17. **接口契约不是一等对象**：它是工作树里一份**固定模板**的 markdown + 注册成
-    `kind=file` 的 Artifact。正文是人写的散文，硬塞进 JSON 只会让人绕过工具；
+    `kind=file` 的 Artifact（靠 `metadata.interface=true` 标记身份）。
+    正文是人写的散文，硬塞进 JSON 只会让人绕过工具；
     diff/blame/历史 Git 已经做得更好。`pjt interface check` 只报告不改写，
     有 error 时退出码 1（可直接当 CI 门禁）。
+    **工具不猜语义**：`kind` 和 `status` 的取值都由项目自定义（`status` 默认
+    `draft`），必填只有 `name`/`status`/`area` 三项，`consumers` 空着只报
+    warning。给 `docs/05` §5 记着每个字段被移除校验的理由——它们都是刻意
+    移除的，不是漏改。
 18. **别人的在途工作看不见，这是架构事实不是 bug**：`git log` 跟着 Git 走所以
     所有人都能看到；`git status` 只有本机能看。`area activity` 因此把两者
     分开输出并标 "THIS machine only"。**不要**把两者混成一张「谁在做什么」

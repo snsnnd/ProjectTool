@@ -38,8 +38,21 @@ from project_tool.domain.errors import InvalidArgument
 
 # ------------------------------------------------------------------ 词汇表
 
-#: 接口状态。`agreed` 是唯一表示「大家认可」的取值，自动索引时只认它。
-STATUSES = ("draft", "review", "agreed", "deprecated")
+#: **建议**的状态词，不是封闭词表。
+#:
+#: `status` 由这个项目自己定义，工具只校验「非空」，不校验取值——理由和
+#: `kind` 完全一样：第一版把 `kind` 写成封闭集合（还默认 `module_api`）、
+#: 把 `status` 写成这四个值，都是把**工具的猜测**焊进了数据。EFW 就需要
+#: `kind: serial_frame` 这种工具猜不到的值，同一个项目也完全可能把状态叫
+#: `stable` 或 `frozen`。
+#:
+#: 保留这几个字是因为它们表达的是跨项目通用的事实（草稿 / 评审 / 已谈定 /
+#: 废弃），模板预填 `draft`，项目想换直接改。**要做自动索引的项目**自己知道
+#: 哪个值算「已谈定」，从 front-matter 读即可，不需要工具替它定义。
+SUGGESTED_STATUSES = ("draft", "review", "agreed", "deprecated")
+
+#: 兼容别名：外部（KC 接入代码）曾 import 这个名字
+STATUSES = SUGGESTED_STATUSES
 
 #: front-matter 无条件必填字段。
 #:
@@ -49,15 +62,23 @@ STATUSES = ("draft", "review", "agreed", "deprecated")
 #: 有值的那些自然会被归类。
 REQUIRED_FIELDS = ("name", "status", "area")
 
-#: **进入评审前**才必填的字段。
+#: 已随 `status` 自由化一并移除的字段。
 #:
-#: 第一版把 `consumers` 也列成必填，结果 `pjt interface init` 不带
-#: `--consumer` 直接失败——而「还没想清楚谁在用」恰恰是 draft 阶段的常态。
-#: 没人填得上的必填字段比没有更糟：它只会训练大家绕过检查。
+#: 原来这里按 `status` 分级要求 `consumers` 非空（`draft` 可以空着）。
+#: 但 `status` 一自由化，分级就没有依据了；而实测 `consumers` **不驱动任何
+#: 工具逻辑**——「哪些契约和这个 task 相关」走的是 `linked`（显式关联）/
+#: `same_area`（同 Area）/ `mentioned`（名字出现）三路，都不看 `consumers`。
+#: 它只是被读出来展示给人看。
 #:
-#: 所以规则是按 `status` 分级的：`draft` 可以空着，`review`/`agreed`
-#: 必须写清消费者。这条规则本身就是「什么时候算谈完」的判据。
-CONDITIONAL_FIELDS = {"consumers": ("review", "agreed", "deprecated")}
+#: 校验一张**工具从不读**的表，唯一效果是卡人。而项目早就记下过这个教训：
+#: 第一版把 `consumers` 设成必填，`pjt interface init` 不带 `--consumer`
+#: 直接失败——「还没想清楚谁在用」恰恰是草稿阶段的常态，没人填得上的必填
+#: 字段只会训练大家绕过检查。
+#:
+#: 保留 `consumers` 字段与 `interface init --consumer`：**它有展示价值**
+#: （改动这份契约时知道该通知谁），只是不再由工具强制。
+#: `interface check` 仍报「没有填 consumers」为 warning，不阻塞。
+CONDITIONAL_FIELDS: dict[str, tuple[str, ...]] = {}
 
 #: 正文必需章节（按顺序）。刻意少而硬：这几节是「跨 Area 协作」真正会吵架的地方。
 REQUIRED_SECTIONS = ("用途", "契约", "变更规则", "兼容策略", "变更历史")
@@ -155,23 +176,17 @@ def check_document(text: str, *, require_sections: bool = True) -> list[Finding]
         if field not in data or data[field] in ("", []):
             out.append(Finding("error", f"front-matter missing required field: {field}"))
 
-    status = data.get("status")
-    if status is not None and status not in STATUSES:
+    # status 自由化：只校验非空（REQUIRED_FIELDS 已覆盖），不校验取值。
+    # 不再按 status 分级强制 consumers——理由见 CONDITIONAL_FIELDS 处的说明。
+    # 改成 warning 而非完全不提示：填了就有价值，值得提醒一句，但不卡人。
+    if data.get("status") and not data.get("consumers"):
         out.append(
             Finding(
-                "error",
-                f"unknown status {status!r}; allowed: {', '.join(STATUSES)}",
+                "warning",
+                "consumers is empty——这份契约谁在依赖没人知道，"
+                "改动时就没有通知对象",
             )
         )
-    elif status in CONDITIONAL_FIELDS.get("consumers", ()):
-        if not data.get("consumers"):
-            out.append(
-                Finding(
-                    "error",
-                    f"consumers is required once status is {status!r} "
-                    "(评审前必须说清谁在依赖这个接口)",
-                )
-            )
 
     if require_sections:
         present = headings(body)
@@ -222,10 +237,11 @@ def require_valid(text: str, *, what: str = "interface document") -> dict[str, A
 def render_template(
     name: str,
     *,
-    kind: str = "module_api",
+    kind: str = "",
     area: str = "",
     owners: list[str] | None = None,
     consumers: list[str] | None = None,
+    status: str = "draft",
     summary: str = "",
     change_rule: str = "",
 ) -> str:
@@ -237,7 +253,7 @@ def render_template(
     data = {
         "name": name,
         "kind": kind,
-        "status": "draft",
+        "status": status or "draft",
         "area": area,
         "owners": owners or [],
         "consumers": consumers or [],
@@ -248,9 +264,14 @@ def render_template(
         if kind
         else "# kind: 由本项目自定，工具不校验（如 store_api / serial_frame）"
     )
-    front = dump_front_matter(data).replace(
-        "status: draft", f"{kind_line}\nstatus: draft"
-    )
+    front = dump_front_matter(data)
+    # `dump_front_matter` 对空值是**跳过**的，所以只有 kind 为空时它才没输出
+    # kind 行，这时才需要补一行注释占位。早先无条件插入，于是任何带 --kind 的
+    # 调用都会写出两行 `kind:`。
+    if not kind:
+        front = front.replace(
+            f"status: {data['status']}", f"{kind_line}\nstatus: {data['status']}"
+        )
     return f"""{front}
 
 # {name}
@@ -287,6 +308,7 @@ __all__ = [
     "REQUIRED_FIELDS",
     "REQUIRED_SECTIONS",
     "STATUSES",
+    "SUGGESTED_STATUSES",
     "Finding",
     "check_document",
     "dump_front_matter",
