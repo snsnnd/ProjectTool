@@ -1,4 +1,4 @@
-# 临时：区分「单文件失败」还是「与其他文件互相干扰」
+# 临时：文件内二分，定位是第几个测试开始的
 name: Diagnose
 
 on:
@@ -7,21 +7,21 @@ on:
     branches: [main]
 
 jobs:
-  combo:
-    name: "win :: ${{ matrix.label }}"
+  prefix:
+    name: "win :: {{ matrix.label }}"
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - label: multiagent alone
-            sel: tests/test_multiagent_flow.py
-          - label: multiagent + claim
-            sel: tests/test_multiagent_flow.py tests/test_claim.py
-          - label: multiagent + coordination
-            sel: tests/test_multiagent_flow.py tests/test_coordination.py
-          - label: full suite
-            sel: tests/
+          - label: "first 2"
+            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins'"
+          - label: "first 4"
+            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins or test_a_collision_switches_task_instead_of_failing or test_parallel_run_leaves_data_intact'"
+          - label: "first 6"
+            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins or test_a_collision_switches_task_instead_of_failing or test_parallel_run_leaves_data_intact or test_every_agent_read_the_interface_contracts_first or test_events_are_attributed_to_the_right_agent'"
+          - label: "first 8"
+            sel: "tests/test_multiagent_flow.py -k 'test_parallel_agents_never_double_work or test_parallel_agents_all_hit_the_same_task_and_only_one_wins or test_a_collision_switches_task_instead_of_failing or test_parallel_run_leaves_data_intact or test_every_agent_read_the_interface_contracts_first or test_events_are_attributed_to_the_right_agent or test_second_claimer_is_told_to_pick_another_task or test_unclaimed_filter_hides_taken_work'"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -29,4 +29,4 @@ jobs:
           python-version: "3.12"
       - run: uv sync
       - name: Run
-        run: uv run pytest -rf --tb=short -p no:cacheprovider ${{ matrix.sel }}
+        run: uv run pytest -rf --tb=short -p no:cacheprovider {{ matrix.sel }}
