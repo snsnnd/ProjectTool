@@ -406,6 +406,13 @@ def render_interface_show(result: dict[str, Any]) -> None:
     )
 
 
+def render_interface_register(result: dict[str, Any]) -> None:
+    console.print(f"[green]registered[/green] {result['id']}  {result.get('name')}")
+    console.print(f"  {result['locator']}")
+    if result.get("related_area_ids"):
+        console.print(f"  area    {', '.join(result['related_area_ids'])}")
+
+
 def render_interface_check(result: dict[str, Any]) -> None:
     rows = result.get("interfaces") or []
     if not rows:

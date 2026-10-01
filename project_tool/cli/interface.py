@@ -17,6 +17,7 @@ from project_tool.cli.common import ExpectedRev, console, execute
 from project_tool.cli.render import (
     render_interface_check,
     render_interface_list,
+    render_interface_register,
     render_interface_show,
 )
 
@@ -33,8 +34,12 @@ def interface_init(
     area: Annotated[str | None, typer.Option("--area", help="Owning area (name or id)")] = None,
     kind: Annotated[
         str,
-        typer.Option("--kind", help="module_api | store_api | event | protocol | other"),
-    ] = "module_api",
+        typer.Option(
+            "--kind",
+            help="Free-form, **chosen by this project** (e.g. store_api, serial_frame). "
+            "Not validated by the tool.",
+        ),
+    ] = "",
     path: Annotated[
         str | None,
         typer.Option("--path", help="Target path (default docs/interfaces/<slug>.md)"),
@@ -106,6 +111,29 @@ def _print_document(result: dict[str, Any]) -> None:
     from rich.text import Text
 
     console.print(Text(result["text"]))
+
+
+@interface_app.command("register")
+def interface_register(
+    ctx: typer.Context,
+    path: Annotated[str, typer.Argument(help="Existing markdown file (project-relative)")],
+    name: Annotated[str | None, typer.Option("--name")] = None,
+    kind: Annotated[str | None, typer.Option("--kind")] = None,
+) -> None:
+    """Register an interface document you already wrote (or migrated)."""
+    result = execute(
+        ctx,
+        "interface.register",
+        {"path": path, "name": name, "kind": kind},
+        render=render_interface_register,
+    )
+    check = (result or {}).get("check") if isinstance(result, dict) else None
+    if isinstance(check, dict) and check.get("errors"):
+        console.print(
+            f"[yellow]registered, but {check['errors']} problem(s) remain[/yellow] "
+            f"[dim](run 'pjt interface check' for detail)[/dim]"
+        )
+    return result
 
 
 @interface_app.command("check")

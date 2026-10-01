@@ -266,7 +266,7 @@ pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
 pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
           |tasks|set-parent|set-owner|match-path|history|activity
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history   （attach/detach 支持 --area）
-pjt interface init|list|show|check|sync     （接口契约：固定模板的 markdown）
+pjt interface init|list|show|register|check|sync   （接口契约：固定模板的 markdown）
 pjt member add|list|show|edit|map-git|deactivate|activate|workload|activity|use
 pjt update add|list|show|edit|archive|history
 pjt decision add|list|show|accept|reject|supersede|history
@@ -316,6 +316,20 @@ pjt area activity [--area <name>] [--days N] [--limit N]
   「没出现在这里就是没人动」
 
 没有 `path_patterns` 的 Area 列为 `bound=false`，代码无法映射到它，会被提示。
+
+#### 接口的 `kind`：由项目定，工具不校验
+
+第一版把 `kind` 在 CLI help 里写成了封闭集合（`module_api | store_api | event |
+protocol | other`）并默认 `module_api` —— 那是把**工具的猜测**焊进了数据。
+真实的 kind 取决于项目：EFW 需要 `serial_frame`，别的项目可能是 `graphql` / `rpc`。
+
+现在 `--kind` 是自由字符串、无默认值、不参与校验，不填也合法。
+将来做自动索引时，有值的自然被归类，没有的就当没分类。
+
+唯一仍是封闭词汇的是 `status`（`draft` / `review` / `agreed` / `deprecated`），
+因为「什么时候算谈完」这条规则依赖它（`review` 之后必须有 `consumers`）。
+如果某个项目的流程不是这样，就得改 `project_tool/domain/interfaces.py` 里的
+`STATUSES` —— 这是**已知待决项**，还没做成项目级配置。
 
 #### link 的机器本地路径（§7）
 

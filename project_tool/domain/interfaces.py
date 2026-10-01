@@ -42,7 +42,12 @@ from project_tool.domain.errors import InvalidArgument
 STATUSES = ("draft", "review", "agreed", "deprecated")
 
 #: front-matter 无条件必填字段。
-REQUIRED_FIELDS = ("name", "status", "area", "kind")
+#:
+#: `kind` **不在**这里：它由**这个项目的人**定义，工具不校验也不设默认值
+#: （第一版 CLI help 把它写成了封闭集合、还默认 `module_api`，那是把工具的
+#: 猜测焊进了数据）。不关心分类的项目可以完全不填；将来做自动索引时
+#: 有值的那些自然会被归类。
+REQUIRED_FIELDS = ("name", "status", "area")
 
 #: **进入评审前**才必填的字段。
 #:
@@ -238,7 +243,15 @@ def render_template(
         "consumers": consumers or [],
         "version": 1,
     }
-    return f"""{dump_front_matter(data)}
+    kind_line = (
+        f"kind: {kind}"
+        if kind
+        else "# kind: 由本项目自定，工具不校验（如 store_api / serial_frame）"
+    )
+    front = dump_front_matter(data).replace(
+        "status: draft", f"{kind_line}\nstatus: draft"
+    )
+    return f"""{front}
 
 # {name}
 

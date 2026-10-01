@@ -207,7 +207,14 @@ def build_registry(service) -> dict[str, MethodSpec]:
             "interface.show", ifaces.interface_show, False, "interface", "read one interface doc"
         ),
         MethodSpec(
-            "interface.sync", ifaces.interface_sync, True, "interface", "align artifact with front-matter"
+            "interface.register",
+            ifaces.interface_register,
+            True,
+            "interface",
+            "register an existing markdown as an interface",
+        ),
+        MethodSpec(
+            "interface.sync", ifaces.interface_sync, True, "interface", "align with front-matter"
         ),
         MethodSpec(
             "interface.check", ifaces.interface_check, False, "interface", "validate interface docs"

@@ -447,3 +447,114 @@ def test_git_status_still_ignores_pjt(svc, root):
         ["git", "-C", str(root), "ls-files", ".pjt"], capture_output=True, text=True
     )
     assert ".pjt/state/state.json" not in tracked.stdout
+
+
+# ================================================================== register / 词汇表
+
+
+def test_interface_register_accepts_a_handwritten_doc(svc, root):
+    """手写文档必须能登记——`init` 只能新建，现实中很多是手写或迁过来的。
+
+    之前没有这条路，只能手改 artifact 的 JSON，而那会被 rev 校验判成
+    `PROJECT_CORRUPTED`（§13 读即校验正好挡住了这个后门）。
+    """
+    svc.call("area.create", {"name": "core"})
+    path = root / "docs" / "legacy.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        iface.render_template("legacy.api", area="core", consumers=["ui"]), encoding="utf-8"
+    )
+    record = svc.call("interface.register", {"path": "docs/legacy.md"})
+    assert record["metadata"]["interface"] is True
+    assert record["related_area_ids"][0].startswith("ARA-")
+    rows = svc.call("interface.list", {})
+    assert [row["name"] for row in rows] == ["legacy.api"]
+
+
+def test_interface_register_rejects_a_file_without_front_matter(svc, root):
+    """没有 front-matter 的只是普通笔记，不是接口。"""
+    path = root / "docs" / "notes.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# 就一些笔记\n", encoding="utf-8")
+    with pytest.raises(InvalidArgument) as excinfo:
+        svc.call("interface.register", {"path": "docs/notes.md"})
+    assert "not an interface document" in str(excinfo.value)
+
+
+def test_interface_register_rejects_a_missing_file(svc, root):
+    from project_tool.domain.errors import NotFound
+
+    with pytest.raises(NotFound):
+        svc.call("interface.register", {"path": "docs/nope.md"})
+
+
+def test_interface_register_does_not_block_on_incomplete_docs(svc, root):
+    """登记的用途就是把「还不完整」的已有文档纳入管理，硬拦会让迁移做不成。"""
+    svc.call("area.create", {"name": "core"})
+    path = root / "docs" / "wip.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\nname: wip.api\nstatus: draft\narea: core\n---\n\n# wip\n",
+        encoding="utf-8",
+    )
+    record = svc.call("interface.register", {"path": "docs/wip.md"})
+    assert record["check"]["ok"] is False  # 登记成功，但体检结果如实带回来
+    assert record["check"]["errors"] >= 1
+
+
+def test_kind_is_free_form_not_a_closed_vocabulary(svc, root):
+    """kind 由**项目**定义，工具不校验。
+
+    第一版的 CLI help 把它写成了 `module_api | store_api | ...`，看起来像
+    封闭集合，还把 `module_api` 设成默认——那是把工具的猜测焊进了数据。
+    """
+    svc.call("area.create", {"name": "core"})
+    record = svc.call(
+        "interface.init",
+        {"name": "debug.serial.frame", "area": "core", "kind": "serial_frame"},
+    )
+    assert record["metadata"]["interface_kind"] == "serial_frame"
+    # 再来一个工具"没见过"的 kind，照样接受
+    record = svc.call(
+        "interface.init",
+        {"name": "odd.thing", "area": "core", "kind": "totally_made_up"},
+    )
+    assert record["metadata"]["interface_kind"] == "totally_made_up"
+
+
+def test_kind_is_not_required_to_come_from_the_tool(svc, root):
+    svc.call("area.create", {"name": "core"})
+    record = svc.call("interface.init", {"name": "a.b", "area": "core"})
+    assert "interface_kind" not in (record["metadata"] or {})
+
+
+def test_a_realistic_handwritten_document_passes_without_false_positives(svc, root):
+    """真人的接口文档有代码块、表格、**不保证**条款——check 不该误报。"""
+    svc.call("area.create", {"name": "core"})
+    path = root / "docs" / "store.updateModel.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        "name: store.updateModel\n"
+        "kind: store_api\n"
+        "status: agreed\n"
+        "area: core\n"
+        "owners: [jichao]\n"
+        "consumers: [ui, dataflow]\n"
+        "version: 3\n"
+        "---\n\n"
+        "# store.updateModel\n\n"
+        "## 用途\n\nstore 批量更新模型。\n\n"
+        "## 契约\n\n"
+        "```ts\nupdateModel(patch: ModelPatch): void\n```\n\n"
+        "- **不保证**：不在调用线程同步派发\n\n"
+        "## 变更规则\n\n1. 变更历史加一行\n2. 建 task\n\n"
+        "## 兼容策略\n\n删字段算破坏性变更。\n\n"
+        "## 变更历史\n\n"
+        "| 日期 | 改动 | 人 |\n|---|---|---|\n| 2026-09-20 | 初稿 | 计超 |\n",
+        encoding="utf-8",
+    )
+    svc.call("interface.register", {"path": "docs/store.updateModel.md"})
+    result = svc.call("interface.check", {})
+    assert result["errors"] == 0, result
+    assert result["warnings"] == 0, result

@@ -178,7 +178,7 @@ class InterfaceService:
         self,
         name,
         area=None,
-        kind: str = "module_api",
+        kind: str | None = None,
         path=None,
         owners=None,
         consumers=None,
@@ -225,7 +225,7 @@ class InterfaceService:
 
         text = iface.render_template(
             display_name,
-            kind=str(kind or "module_api"),
+            kind=str(kind or ""),
             area=area_name,
             owners=owner_refs,
             consumers=consumer_refs,
@@ -247,16 +247,83 @@ class InterfaceService:
             project_id=self.ctx.opened.project.id,
             name=display_name,
             description=optional_text(
-                summary or f"interface contract ({kind})", "description"
+                summary or (f"interface contract ({kind})" if kind else "interface contract"),
+                "description",
             ),
             kind=ArtifactKind.FILE,
             locator=checked,
             related_area_ids=[area_id] if area_id else [],
-            metadata={INTERFACE_KIND: True, "interface_kind": str(kind or "module_api")},
+            metadata=(
+                {INTERFACE_KIND: True, "interface_kind": str(kind)}
+                if kind
+                else {INTERFACE_KIND: True}
+            ),
             created_at=now,
             updated_at=now,
         )
         record = self.ctx.save(artifact, None, "artifact.added", {"name": display_name}, is_create=True)
+        return record
+
+    def interface_register(self, path, name=None, kind=None) -> dict[str, Any]:
+        """把一份**已经存在的** markdown 登记成接口（迁移 / 手工维护的场景）。
+
+        `interface.init` 只能从模板新建；但现实中很多接口文档是手写的、或者
+        从别的工具迁过来的。不给这条路，就只能去手改 artifact 的 JSON——
+        而那会被 rev 校验判成 `PROJECT_CORRUPTED`（§13 的读即校验，
+        正好挡住了这个「后门」，所以必须提供正规的入口）。
+
+        **不因为 `check` 有 error 就拒绝登记**：登记的用途恰恰是把已有的、
+        可能还不完整的文档纳入管理。硬拦会让迁移做不成。
+        但 front-matter 必须能解析——那才叫接口文档，没有它只是普通笔记。
+        """
+        target = Path(str(path))
+        if not target.is_absolute():
+            target = self.ctx.paths.root / target
+        target = target.resolve()
+        locator = _relative(self.ctx, target)
+        if not target.is_file():
+            raise NotFound(f"{locator} does not exist")
+
+        text = target.read_text(encoding="utf-8")
+        data, _, error = iface.parse_front_matter(text)
+        if error is not None:
+            raise InvalidArgument(
+                f"{locator} is not an interface document: {error}. "
+                "Scaffold one with 'pjt interface init' or add front-matter "
+                "(--- / name / kind / status / area). See docs/03-data-model.md §4.7c."
+            )
+
+        display_name = str(name or data.get("name") or target.stem)
+        existing = _artifact_id_for(self.ctx, locator=locator)
+        if existing is not None:
+            return self.interface_sync(artifact=existing, expected_rev=None)
+
+        area_ref = str(data.get("area") or "").strip()
+        area_id = self.ctx.area_id(area_ref) if area_ref else ""
+        doc_kind = str(kind or data.get("kind") or "").strip()
+        now = now_local()
+        artifact = Artifact(
+            id=new_id("artifact"),
+            project_id=self.ctx.opened.project.id,
+            name=require_title(display_name, "interface name"),
+            description=optional_text(
+                f"interface contract ({doc_kind})" if doc_kind else "interface contract",
+                "description",
+            ),
+            kind=ArtifactKind.FILE,
+            locator=check_locator(ArtifactKind.FILE, locator),
+            related_area_ids=[area_id] if area_id else [],
+            metadata={INTERFACE_KIND: True, "interface_kind": doc_kind} if doc_kind
+            else {INTERFACE_KIND: True},
+            created_at=now,
+            updated_at=now,
+        )
+        record = self.ctx.save(
+            artifact, None, "artifact.added", {"name": display_name}, is_create=True
+        )
+        # 把当前体检结果一起带回去，让人知道登记进来之后还差什么
+        record = dict(record)
+        record["check"] = self.interface_check(artifact=record["id"])
         return record
 
     def interface_sync(self, artifact=None, name=None, expected_rev=None) -> dict[str, Any]:
