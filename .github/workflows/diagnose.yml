@@ -1,0 +1,32 @@
+# 临时：定位 windows-latest 上失败的是哪个测试
+name: Diagnose
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  per-test:
+    name: "win :: ${{ matrix.t }}"
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        t:
+          - test_parallel_agents_never_double_work
+          - test_parallel_agents_all_hit_the_same_task_and_only_one_wins
+          - test_a_collision_switches_task_instead_of_failing
+          - test_parallel_run_leaves_data_intact
+          - test_every_agent_read_the_interface_contracts_first
+          - test_events_are_attributed_to_the_right_agent
+          - test_second_claimer_is_told_to_pick_another_task
+          - test_unclaimed_filter_hides_taken_work
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Run
+        run: uv run pytest -rf --tb=short -p no:cacheprovider "tests/test_multiagent_flow.py::${{ matrix.t }}"
