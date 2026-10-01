@@ -135,13 +135,39 @@ class ProjectService:
             tool_schema=SCHEMA_VERSION,
         )
 
-    def system_capabilities(self) -> dict[str, Any]:
-        return {
+    def system_capabilities(self, detail: bool = False) -> dict[str, Any]:
+        """能力发现。
+
+        `detail=False`（默认）保持原有形状，**不破坏既有调用方**：
+        `methods` 仍是排序后的方法名列表。
+
+        `detail=True` 额外给出 `specs`：每个方法的 `mutating` / `category` /
+        `description`。KC 这类**平台包装**做 method 级白名单或只读门禁时
+        需要这些元信息——否则只能 import 内部 `MethodSpec` 去读，那等于
+        把内部实现变成公开契约。
+        """
+        payload: dict[str, Any] = {
             "protocol_version": PROTOCOL_VERSION,
             "schema_version": SCHEMA_VERSION,
             "methods": sorted(self.registry),
             "features": dict(CAPABILITIES_FEATURES),
         }
+        if detail:
+            payload["specs"] = {
+                name: {
+                    "mutating": spec.mutating,
+                    "category": spec.category,
+                    "description": spec.description,
+                }
+                for name, spec in sorted(self.registry.items())
+            }
+            payload["read_only_methods"] = sorted(
+                name for name, spec in self.registry.items() if not spec.mutating
+            )
+            payload["mutating_methods"] = sorted(
+                name for name, spec in self.registry.items() if spec.mutating
+            )
+        return payload
 
     # ------------------------------------------------------------ 兼容私有 helper
 

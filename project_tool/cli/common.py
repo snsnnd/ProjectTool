@@ -31,6 +31,47 @@ ExpectedRev = Annotated[
 ]
 
 
+def key_values(items) -> dict[str, str]:
+    """把重复的 `key=value` 选项解析成 dict。
+
+    给 `--external-id kc_user=u_1 --external-id email=a@b.c` 这类选项用。
+    - 缺 `=`、key 空、value 含 `=`（如 URL）都按「只 split 一次」处理
+    - 同一个 key 出现多次时后者覆盖前者（一次调用内即可预期）
+    - 空列表返回空 dict，调用方可以据此判断「用户没传」
+    """
+    out: dict[str, str] = {}
+    for item in items or []:
+        text = str(item)
+        if "=" not in text:
+            raise InvalidArgument(
+                f"expected key=value, got {text!r} (e.g. --external-id kc_user=u_12345)"
+            )
+        key, _, value = text.partition("=")
+        key = key.strip()
+        if not key:
+            raise InvalidArgument(f"empty key in {text!r}")
+        out[key] = value.strip()
+    return out
+
+
+def key_values_or_fail(state: CliState, items, option: str) -> dict[str, str] | None:
+    """和 `key_values` 一样，但把 `InvalidArgument` 走**正常错误通道**。
+
+    为什么需要它：params 字典是在**调用点**构造的，也就是在 `execute()` 的
+    try 之外。所以直接调 `key_values()` 抛出的异常会绕过 `execute` 的
+    统一处理，变成裸 traceback（`--json` 模式下甚至不是合法的错误包）。
+    """
+    try:
+        parsed = key_values(items)
+    except ProjectToolError as exc:
+        fail(state, exc)
+    if not items:
+        return None
+    if not parsed:
+        fail(state, InvalidArgument(f"{option} needs at least one key=value pair"))
+    return parsed
+
+
 class CliState:
     def __init__(self, json_out: bool, porcelain: bool, actor: str | None, project: str | None):
         self.json_out = json_out

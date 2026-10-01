@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
-from project_tool.cli.common import ExpectedRev, console, execute
+from project_tool.cli.common import (
+    CliState,
+    ExpectedRev,
+    console,
+    execute,
+    key_values_or_fail,
+)
 from project_tool.cli.render import render_events, render_member_list, render_member_workload
 
 member_app = typer.Typer(help="Member management", no_args_is_help=True)
@@ -24,6 +30,13 @@ def member_add(
     git_email: Annotated[
         list[str] | None, typer.Option("--git-email", help="Git author email (repeatable)")
     ] = None,
+    external_id: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--external-id",
+            help="External system id as key=value (repeatable), e.g. kc_user=u_12345",
+        ),
+    ] = None,
 ) -> None:
     """Add a project member."""
     execute(
@@ -35,6 +48,9 @@ def member_add(
             "roles": role,
             "git_names": git_name,
             "git_emails": git_email,
+            "external_ids": key_values_or_fail(
+                cast(CliState, ctx.obj), external_id, "--external-id"
+            ),
         },
         render=lambda r: console.print(
             f"[green]added[/green] {r['handle']}  {r['display_name']}  ({r['id']})"
@@ -70,6 +86,13 @@ def member_edit(
     role: Annotated[list[str] | None, typer.Option("--role")] = None,
     git_name: Annotated[list[str] | None, typer.Option("--git-name")] = None,
     git_email: Annotated[list[str] | None, typer.Option("--git-email")] = None,
+    external_id: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--external-id",
+            help="External system id as key=value (repeatable), e.g. kc_user=u_12345",
+        ),
+    ] = None,
     expected_rev: ExpectedRev = None,
 ) -> None:
     """Edit a member."""
@@ -82,6 +105,9 @@ def member_edit(
             "roles": role,
             "git_names": git_name,
             "git_emails": git_email,
+            "external_ids": key_values_or_fail(
+                cast(CliState, ctx.obj), external_id, "--external-id"
+            ),
             "expected_rev": expected_rev,
         },
         render=lambda r: console.print(f"{r['handle']} updated"),

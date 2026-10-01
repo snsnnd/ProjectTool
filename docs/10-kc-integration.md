@@ -120,9 +120,32 @@ svc.call("system.capabilities", {})
 > ⚠️ `system.capabilities` **没有 CLI 子命令**，只能走 Python API
 > （`pjt system.capabilities` 会报 "No such command"）。
 
+**想知道 CLI 能做什么**（给人写文档、给用户做输入提示时用）：
+
+```python
+svc.call("system.cli", {})
+# {"count": 125,
+#  "commands": [{"path": ["area","set-owner"], "kind": "command",
+#                "method": "area.set_owner", "also_calls": [],
+#                "summary": "Add/remove the members responsible for an area.",
+#                "params": [{"name":"area_id","flag":null,"positional":true,
+#                            "required":true,"is_flag":false,"multiple":false,
+#                            "help":""}, ...]}],
+#  "method_to_paths": {"task.set_status": ["task block","task cancel", ...]},
+#  "unmapped": []}
+```
+
+- `path` 是命令路径，`method` 是对应的 registry method
+- `pjt graph <scope>` 这类**按运行时分派到多个 method** 的命令，`method` 为
+  `null`，实际会调的列在 `also_calls`
+- `method_to_paths` 是反向表：`task.set_status` 一条 method 对应 5 条命令
+  （`task start|block|review|done|cancel`）
+- `unmapped` 是"没对上 method 的可执行命令"，正常应为空 —— 非空说明映射表过期了。
+  有测试守着：`tests/test_registry.py::test_every_cli_method_map_target_exists`
+
 `features.remote` / `sync` / `web` 是 `false` —— **今天不存在远程 API**，
-KC 通过 Git 取数是唯一正确的方式。`system.capabilities` 返回的是**方法名列表**；
-`MethodSpec` 里还有 `mutating` / `category` / `description`（见 §7 已知缺口）。
+KC 通过 Git 取数是唯一正确的方式。要拿 method 的 `mutating` / `category` /
+`description`（做权限白名单用），传 `detail=True`，见下。
 
 ## 4. KC 建议调用的方法
 
@@ -156,6 +179,129 @@ KC 通过 Git 取数是唯一正确的方式。`system.capabilities` 返回的�
 所有写方法都接受 `expected_rev`。**KC 侧建议一律带上**：先读出对象的
 `rev`，回传时带上；对象已被别人改过就返回 `REVISION_CONFLICT`，
 KC 重新读一次再让用户确认。**不要静默重试覆盖**。
+
+## 4.5 初始化之后怎么分发到每个人
+
+这一节是实测出来的（3 人 × 3 个 Area 走完整流程，见下），**不是推演**。
+
+### 前提：工具永远不做 Git 写操作
+
+`pjt` 不 `push` / `clone` / `merge`（`AGENTS.md` §11：Git 适配器只读，
+子命令白名单只有 `rev-parse` / `status` / `log` / `show` / `ls-files`）。
+所以"分发"这一步是**普通 Git 操作**，由 KC 或人执行。工具只管 `.pjt` 里的数据。
+
+### ⚠️ 最容易静默失败的一步：裸库的 HEAD
+
+```bash
+git init --bare origin.git          # HEAD 指向 refs/heads/master
+git push -u origin main             # 实际分支是 main
+```
+
+**此时 `git clone` 会给出一个空的检出**，只打一行 warning：
+
+```text
+warning: remote HEAD refers to nonexistent ref, unable to checkout.
+```
+
+`.pjt` 根本没被 checkout 出去，对方看到的是一个"没有 .pjt 的项目"，
+而每个人的本地 `pjt` 全部报 `NOT_FOUND`。**这是整条分发链最容易静默失败的地方。**
+
+修法二选一：
+
+```bash
+git init --bare -b main origin.git                      # 建的时候就指定
+git -C origin.git symbolic-ref HEAD refs/heads/main     # 或者事后纠正
+```
+
+### 完整流程
+
+**KC 侧（一次性）**
+
+```bash
+# 1) 在一个 git 仓库里初始化
+mkdir kc-workspace && cd kc-workspace && git init -b main
+pjt init --name "SerialConsole" --description "串口调试控制台"
+
+# 2) 建成员。--git-name / --git-email **必须和开发者本地 git config 一致**，
+#    否则 area.activity 归因不到人（见下）
+pjt member add jichao --name "计超" --role leader \
+  --external-id kc_user=u_1001 --git-name "计超" --git-email jichao@corp.com
+pjt member add shaodong --name "晓东" \
+  --external-id kc_user=u_1002 --git-name "晓东" --git-email shaodong@corp.com
+
+# 3) 建 Area 并分工（复数 owner = 公共接口区）
+pjt area add core --path-pattern "studio_core/**"
+pjt area add ui   --path-pattern "studio_ui/**"
+pjt area set-owner core --add jichao
+pjt area set-owner ui   --add shaodong
+pjt area set-owner core --add shaodong      # core 变公共区
+
+# 4) 推给团队（普通 git，不是 pjt）
+git add -A && git commit -m "KC 初始化：成员与分工"
+git init --bare -b main ../origin.git
+git remote add origin ../origin.git && git push -u origin main
+```
+
+**每个开发者（一次性，3 步）**
+
+```bash
+git clone <origin> && cd project
+
+# ① 设 pjt actor —— 否则事件会记到"上一个操作者"头上
+pjt member use jichao
+
+# ② 让本地 git identity 和 Member.git 对上 —— 否则 area.activity 归因不到人
+git config user.name  "计超"
+git config user.email "jichao@corp.com"
+
+# ③ 验证：应该能在 area activity 里看到自己
+pjt area activity --days 7
+```
+
+### ②为什么必须做
+
+`area activity` 的归因链是：commit 的 author name/email → `Member.git` 匹配。
+两边对不上时，它会**如实报 `unmapped_authors` 而不是猜**：
+
+```text
+authors with no Member.git mapping:
+  snsnnd  6 commit(s)      ← 这是某台机器的全局 git identity
+  KC      1 commit(s)
+```
+
+所以 KC 建成员时**要同时填 `--git-name` 和 `--git-email`**，只填 email 的话，
+开发者本地用中文名提交就匹配不上（名字匹配不到、email 也不同）。
+
+### 日常协作
+
+每人一个特性分支，推上去，在集成分支汇合：
+
+```bash
+git checkout -b work/jichao
+# …干活…
+pjt task add "…" --area core && pjt task start <id>
+git add -A && git commit -m "…" && git push -u origin work/jichao
+# 集成分支上
+git merge --no-edit origin/work/jichao
+```
+
+### 实测结果
+
+3 人 / 3 个 Area 跑完整流程：
+
+- **3/3 分支合并全部干净**（与 `dogfooding/scripts/multiwriter_probe.py`
+  的 8/9 结论一致 —— 剩下那一个才是真冲突）
+- 事件 `actor_id` 正确分散到三个人
+- `area activity` 正确把人归到对应 Area
+- 归因不上的历史提交被如实标为 unmapped，没有猜错
+
+### 已知摩擦
+
+| 现象 | 原因 | 处置 |
+|---|---|---|
+| clone 后没有 `.pjt` | 裸库 HEAD 指向不存在的分支（见上） | `git symbolic-ref HEAD refs/heads/main` |
+| `area activity` 出现机器全局用户名 | 开发者本地 git identity 没和 `Member.git` 对上 | 让开发者设 `git config`，或 KC 补 `member edit --git-name` |
+| KC 自己的提交显示为 unmapped | KC 不是 Member | 可接受；`pjt init` 产生的事件本来就没有 actor |
 
 ## 5. 身份映射：KC 用户 ↔ Member
 
@@ -216,19 +362,25 @@ KC 分发的管理员权限，**只能管住"通过 KC 的操作"**。
 
 ## 7. 已知缺口 / 需要 KC 配合的
 
-1. **`external_ids` 目前没有 CLI 选项**。模型和 service（`member.add` /
-   `member.update`）里都有，但 `pjt member add|edit` 没有 `--external-id`。
-   KC 走 Python API 可用；也可以只用 `git.emails` 回退。
-2. **`system.capabilities` 只返回方法名**，不含 `MethodSpec.mutating` /
-   `category`。若 KC 要在 method 级别做白名单，目前得 import 内部类。
-   KC 若只调 §4 那几十个方法，硬编码白名单也够用。
-3. **`external_ids` 的 key 命名**待定：`kc_user`？还是 `kc:<org>:user`
+**本轮已补齐**
+
+1. ✅ **`external_ids` 的 CLI 入口** —— `pjt member add|edit --external-id k=v`
+   （可重复；值里含 `=` 也没问题，只 split 一次）
+2. ✅ **`system.capabilities` 的 method 元信息** ——
+   `svc.call("system.capabilities", {"detail": True})` 额外给出 `specs` /
+   `read_only_methods` / `mutating_methods`（**63 写 / 55 读**）。
+   不传 `detail` 时形状不变，不破坏既有调用方。
+3. ✅ **完整 CLI 命令面** —— `svc.call("system.cli", {})`，见 §3
+
+**仍待 KC 决定**
+
+4. **`external_ids` 的 key 命名**：`kc_user`？还是 `kc:<org>:user`
    （一个项目对接多个 KC 组织）？
-4. **`maintainer` 角色**：EFW 项目在用，不在工具建议词汇表
+5. **`maintainer` 角色**：EFW 项目在用，不在工具建议词汇表
    （`leader` / `member` / `viewer`）内，`pjt doctor` 会报 **warning**
    （不是 error —— 老项目可能有自由 role，不能因此判数据损坏）。
    **KC 侧别把它当错误处理。**
-5. **可视化怎么产出**：见下节。
+6. **可视化怎么产出**：见 §8。
 
 ## 8. 可视化：建议静态报告，不建议在服务端渲染
 

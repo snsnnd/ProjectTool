@@ -87,3 +87,72 @@ def test_handle_returns_result_payload(service):
     response = service.handle("system.info", {}, request_id="r2")
     assert response["id"] == "r2"
     assert response["result"]["tool"] == "project-tool"
+
+
+# ------------------------------------------------------- CLI / registry 对齐
+
+
+def test_every_cli_method_map_target_exists(tmp_path):
+    """CLI_METHOD_MAP 里的 method 名必须是真实存在的 registry method。
+
+    这条防的是「文档/映射表慢慢和代码脱节」——手写的映射表迟早会错，
+    而错成不存在的 method 只会让调用方在运行时才发现。
+    """
+    from project_tool.application.service import ProjectService
+    from project_tool.cli.main import CLI_METHOD_FANOUT, CLI_METHOD_MAP
+    from project_tool.storage import init_project, open_project
+
+    init_project(tmp_path, name="Map")
+    available = set(
+        ProjectService(open_project(tmp_path)).call("system.capabilities", {})["methods"]
+    )
+    missing = {
+        path: method for path, method in CLI_METHOD_MAP.items() if method not in available
+    }
+    assert missing == {}, f"CLI_METHOD_MAP points at non-existent methods: {missing}"
+    missing_fanout = {
+        path: [m for m in methods if m not in available]
+        for path, methods in CLI_METHOD_FANOUT.items()
+    }
+    missing_fanout = {k: v for k, v in missing_fanout.items() if v}
+    assert missing_fanout == {}, missing_fanout
+
+
+def test_system_cli_lists_every_command_with_a_resolvable_method(tmp_path):
+    from project_tool.application.service import ProjectService
+    from project_tool.storage import init_project, open_project
+
+    init_project(tmp_path, name="Surface")
+    service = ProjectService(open_project(tmp_path))
+    surface = service.call("system.cli", {})
+    available = set(service.call("system.capabilities", {})["methods"])
+
+    commands = [c for c in surface["commands"] if c["kind"] == "command"]
+    assert len(commands) > 100, f"only {len(commands)} commands found"
+    for command in commands:
+        targets = ([command["method"]] if command["method"] else []) + command.get("also_calls", [])
+        for target in targets:
+            assert target in available, f"{command['path']} -> {target} not in registry"
+        assert command["summary"], f"{command['path']} has no summary (missing docstring?)"
+
+
+def test_capabilities_detail_is_backward_compatible(tmp_path):
+    """detail=False 必须保持原有形状——不能为了加元信息破坏既有调用方。"""
+    from project_tool.application.service import ProjectService
+    from project_tool.storage import init_project, open_project
+
+    init_project(tmp_path, name="Compat")
+    service = ProjectService(open_project(tmp_path))
+    plain = service.call("system.capabilities", {})
+    assert set(plain) == {"protocol_version", "schema_version", "methods", "features"}
+
+    detail = service.call("system.capabilities", {"detail": True})
+    assert set(plain).issubset(set(detail))
+    assert detail["specs"]["area.set_owner"]["mutating"] is True
+    assert "area.set_owner" in detail["mutating_methods"]
+    assert "area.list" in detail["read_only_methods"]
+    # 两边必须互补且不重叠
+    assert set(detail["read_only_methods"]) | set(detail["mutating_methods"]) == set(
+        detail["methods"]
+    )
+    assert not set(detail["read_only_methods"]) & set(detail["mutating_methods"])

@@ -44,6 +44,9 @@ def build_registry(service) -> dict[str, MethodSpec]:
         MethodSpec(
             "system.capabilities", service.system_capabilities, False, "system", "capability discovery"
         ),
+        MethodSpec(
+            "system.cli", service.system.system_cli, False, "system", "full CLI command tree"
+        ),
         # project
         MethodSpec("project.init", project.project_init, True, "project", "initialize a project"),
         MethodSpec("project.open", project.project_open, False, "project", "open summary"),

@@ -558,3 +558,48 @@ def test_a_realistic_handwritten_document_passes_without_false_positives(svc, ro
     result = svc.call("interface.check", {})
     assert result["errors"] == 0, result
     assert result["warnings"] == 0, result
+
+
+def test_cli_external_id_round_trip(root):
+    """KC 映射 KC user id 的 CLI 入口（之前只有 Python API 能写）。"""
+    invoke(
+        [
+            "-C", str(root), "member", "add", "jichao", "--name", "计超",
+            "--external-id", "kc_user=u_12345",
+            "--external-id", "email=jichao@corp.com",
+        ]
+    )
+    listed = json.loads(invoke(["--json", "-C", str(root), "member", "list"]).output)["result"]
+    ids = listed[0]["external_ids"]
+    assert ids == {"kc_user": "u_12345", "email": "jichao@corp.com"}
+
+
+def test_cli_external_id_replaces_on_edit(root):
+    invoke(["-C", str(root), "member", "add", "jichao", "--external-id", "kc_user=old"])
+    assert invoke(
+        ["-C", str(root), "member", "edit", "jichao", "--external-id", "kc_user=new"]
+    ).exit_code == 0
+    listed = json.loads(invoke(["--json", "-C", str(root), "member", "list"]).output)["result"]
+    assert listed[0]["external_ids"] == {"kc_user": "new"}
+
+
+def test_cli_external_id_rejects_a_value_without_an_equals(root):
+    invoke(["-C", str(root), "member", "add", "jichao"])
+    bad = invoke(["--json", "-C", str(root), "member", "edit", "jichao", "--external-id", "nope"])
+    assert bad.exit_code != 0
+    # 必须走正常错误通道：`--json` 模式下是合法错误包，而不是裸 traceback
+    envelope = json.loads(bad.output)
+    assert envelope["error"]["code"] == "INVALID_ARGUMENT"
+    assert "key=value" in envelope["error"]["message"]
+
+
+def test_key_values_keeps_equals_signs_inside_the_value():
+    from project_tool.cli.common import key_values
+
+    assert key_values(["url=https://x/y?a=b"]) == {"url": "https://x/y?a=b"}
+    assert key_values([]) == {}
+    assert key_values(["a=1", "a=2"]) == {"a": "2"}
+    with pytest.raises(InvalidArgument):
+        key_values(["nokey"])
+    with pytest.raises(InvalidArgument):
+        key_values(["=value"])
