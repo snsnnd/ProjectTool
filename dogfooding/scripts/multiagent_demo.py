@@ -15,6 +15,27 @@
 
 跑法：
     python3 dogfooding/scripts/multiagent_demo.py
+
+## 它不进 CI —— 而且是有理由的
+
+这个脚本要 **210–280 秒**，比整个测试套件还慢 2 倍（每个 `pjt` 调用都是一次
+解释器启动 + pydantic 导入，再叠加 WriteLock 排队）。每次 CI 跑它太贵。
+
+CI 里跑的是 `tests/test_multiagent_flow.py`：**线程 + barrier**，**124 ms**，
+碰撞**每次必然发生**（barrier 让三者先读到同一个最优 task 再同时认领），
+而且断言的是不变量 —— 所以不会因为时序而假通过。
+
+分工：
+
+| | 本脚本 | CI 测试 |
+|---|---|---|
+| 进程模型 | 真子进程（验跨进程差异：PJT_ACTOR、device_id、活 PID 锁） | 线程（同进程，共享 PID） |
+| 耗时 | 210–280 s | 124 ms |
+| 碰撞 | 靠时序，会撞 | barrier 保证必然撞 |
+| 频率 | 手动 / 改动协调逻辑时 | 每次 CI |
+
+它抓到过一个真 bug（认领竞态下输的一方拿到 `REVISION_CONFLICT` 而非
+`CLAIMED`），所以留着有价值 —— 只是不该每次 CI 都付这个钱。
 """
 
 from __future__ import annotations

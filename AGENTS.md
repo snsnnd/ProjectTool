@@ -101,6 +101,12 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     为什么认领要单独一步：认领是一个**决定**，不是查询的一部分。
     想看不能看、想占得先查一遍，那是设计缺陷。
 
+20. **改了协调 / 并发逻辑，手动跑一次多 agent 验证**：
+    `python3 dogfooding/scripts/multiagent_demo.py`（3 个真子进程抢同一批 task）。
+    CI 里跑的是 `tests/test_multiagent_flow.py`（线程 + barrier，124 ms，碰撞必然
+    发生），但它验不了跨进程差异（`PJT_ACTOR`、device_id、活 PID 锁）。
+    demo 要 210–280 秒，所以不进 CI——改了 `task claim` / WriteLock 之后手动跑一次。
+
 ## 3. 常用命令
 
 ```bash
