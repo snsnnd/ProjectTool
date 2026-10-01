@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import Any
 
 from project_tool.domain.area_paths import find_matching_paths, normalize_path_pattern
+from project_tool.domain.artifact import RELATION_FIELDS
 from project_tool.domain.artifact_locator import verify_locator
 from project_tool.domain.enums import ArtifactKind, Lifecycle
 from project_tool.domain.errors import ProjectToolError
@@ -199,14 +200,12 @@ def run_doctor(ctx) -> dict[str, Any]:
         source = str(record.get("id", "?"))
         if record.get("lifecycle") == Lifecycle.DELETED.value:
             continue
-        for task_id in record.get("related_task_ids", []) or []:
-            check_ref("task", task_id, source)
-        for decision_id in record.get("related_decision_ids", []) or []:
-            check_ref("decision", decision_id, source)
-        for milestone_id in record.get("related_milestone_ids", []) or []:
-            check_ref("milestone", milestone_id, source)
-        for goal_id in record.get("related_goal_ids", []) or []:
-            check_ref("goal", goal_id, source)
+        # 遍历 RELATION_FIELDS 而不是逐字段列举：V1-C 加了 `related_area_ids`
+        # 之后这里被漏掉了，于是指向已删除 Area 的接口契约能静默通过 doctor。
+        # 关系字段再来一个，逐行列举的方式还会再漏一次。
+        for object_type, field_name in RELATION_FIELDS:
+            for ref_id in record.get(field_name, []) or []:
+                check_ref(object_type, ref_id, source)
 
     if ref_errors:
         add("references", "error", f"{len(ref_errors)} broken reference(s)", ref_errors)

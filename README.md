@@ -194,7 +194,7 @@ Project
 │     └── related_artifacts 产物引用（反向派生读）
 ├── Decision ── artifacts    为什么这么定 + 支撑它的文件（源码 / 文档 / commit）
 ├── Artifact                 ART-，kind + locator（纯引用，不存内容）
-│                              其中 kind=interface_contract 指向工作树里的契约 markdown
+│                              接口契约 = kind=file + metadata.interface=true
 ├── Member / Update / Link
 └── Event History            append-only，base_rev → new_rev 链
 ```
@@ -209,9 +209,13 @@ Project
 多个 = 公共接口区**（被 UI / 数据流 / 状态机共同依赖的 core 就是这样）。
 不需要 `shared` 标记。Milestone 和 Goal **故意没有** owner —— 只有 Area 是分区单元。
 
-**接口契约不是一等对象**：它是工作树里一份固定模板的 markdown，再注册成
-`kind=interface_contract` 的 Artifact。正文是人写的散文，硬塞进 JSON 只会让人
-绕过工具 —— diff / blame / 历史 Git 已经做得更好。`interface check` 只报告不改写。
+**接口契约不是一等对象**：它是工作树里一份固定模板的 markdown，再注册成一份
+`kind=file` 的 Artifact，靠 `metadata.interface=true` 标记身份（**不是**靠
+`Artifact.kind`——那是个封闭枚举，只有 `file/url/git_commit/git_branch` 和 10 种
+不透明形态）。所以手工登记的 `kind=file` Artifact 默认**不会**出现在
+`interface list` 里，要用 `pjt interface register`。正文是人写的散文，硬塞进
+JSON 只会让人绕过工具 —— diff / blame / 历史 Git 已经做得更好。
+`interface check` 只报告不改写，有 error 时退出码 1（可直接当 CI 门禁）。
 
 ## CLI 速查
 

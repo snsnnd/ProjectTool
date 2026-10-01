@@ -161,3 +161,69 @@ def test_capabilities_detail_is_backward_compatible(tmp_path):
         detail["methods"]
     )
     assert not set(detail["read_only_methods"]) & set(detail["mutating_methods"])
+
+
+# ================================================================== 命令面脱节
+
+
+#: 这些命令在 `cli/task.py` 里全部走同一个 `_set_status` wrapper
+STATUS_SHORTCUTS = ("ready", "start", "block", "review", "done", "cancel")
+
+
+def test_status_shortcuts_all_map_to_set_status():
+    """状态快捷命令共用一个 wrapper，最容易和 `CLI_METHOD_MAP` 脱节。
+
+    `task ready` 曾经被登记成 `task.list`。运行期无害——它照样 dispatch 到
+    `set_status`——但 `system.cli` 是 KC 发现命令面的依据，外部消费者会
+    按 `method` 生成界面，于是拿到一个与实际行为不符的方法名。
+    """
+    from project_tool.cli.main import CLI_METHOD_MAP
+
+    for name in STATUS_SHORTCUTS:
+        assert CLI_METHOD_MAP[f"task.{name}"] == "task.set_status", (
+            f"task {name} 实际调 set_status，映射却写成 "
+            f"{CLI_METHOD_MAP[f'task.{name}']}"
+        )
+
+
+def test_map_entries_point_at_methods_their_module_actually_calls():
+    """映射到的 method 必须真的出现在对应 CLI 模块里，不能只是碰巧存在。
+
+    这条比「method 在 registry 里」强：那只能证明目标有效，证明不了
+    声明与行为一致，而后者正是 `task.ready` 出错的地方。
+    """
+    import pathlib
+
+    from project_tool.cli.main import CLI_METHOD_MAP
+
+    cli_dir = pathlib.Path(__file__).resolve().parent.parent / "project_tool" / "cli"
+    sources = {p.stem: p.read_text(encoding="utf-8") for p in cli_dir.glob("*.py")}
+
+    # 这些 method 由共享渲染器 / 根命令回调调用，源码里不出现字面量
+    not_literal = {
+        "project.init",  # cli/project.py 走 app.callback
+        "log.list",  # cli/log.py
+    }
+
+    # 顶层命令的实现在别的模块：domain 名是命令名，模块名不是
+    top_level_home = {
+        "init": "project",
+        "status": "project",
+        "doctor": "project",
+        "migrate": "project",
+        "log": "log",
+        "graph": "graph",
+    }
+
+    checked = 0
+    for path, method in CLI_METHOD_MAP.items():
+        if method in not_literal:
+            continue
+        domain = path.split(".", 1)[0] if "." in path else top_level_home[path]
+        source = sources.get(domain, "")
+        assert f'"{method}"' in source or f"'{method}'" in source, (
+            f"CLI_METHOD_MAP 声明 {path} -> {method}，"
+            f"但 cli/{domain}.py 里找不到对它的调用"
+        )
+        checked += 1
+    assert checked > 90, f"只校验了 {checked} 条，映射表可能没被真正遍历"

@@ -289,7 +289,7 @@ CLI_METHOD_MAP: dict[str, str] = {
     "task.list": "task.list",
     "task.show": "task.get",
     "task.edit": "task.update",
-    "task.ready": "task.list",
+    "task.ready": "task.set_status",
     "task.start": "task.set_status",
     "task.block": "task.set_status",
     "task.review": "task.set_status",
