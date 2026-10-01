@@ -12,6 +12,7 @@ from project_tool.cli.render import (
     render_artifact_list,
     render_events,
     render_task_interfaces,
+    render_task_next,
     render_task_show,
     render_task_table,
     render_update_list,
@@ -353,6 +354,26 @@ def task_move_area(
         "task.move_area",
         {"task_id": task_id, "area_id": area, "expected_rev": expected_rev},
         render=lambda result: console.print(f"{result['id']} area: {sid(result.get('area_id'))}"),
+    )
+
+
+@task_app.command("next")
+def task_next(
+    ctx: typer.Context,
+    area: Annotated[str | None, typer.Option("--area", "-a", help="Restrict to one area")] = None,
+    include_claimed: Annotated[
+        bool, typer.Option("--include-claimed", help="Also consider tasks with a live claim")
+    ] = False,
+) -> None:
+    """Next workable task + a briefing. READ-ONLY: it does not claim anything.
+
+    Claiming is a decision, not part of a query — look first, then decide.
+    """
+    execute(
+        ctx,
+        "task.next",
+        {"area": area, "include_claimed": include_claimed},
+        render=render_task_next,
     )
 
 

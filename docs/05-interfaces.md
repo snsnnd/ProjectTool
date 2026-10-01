@@ -264,6 +264,7 @@ pjt milestone add|list|show|edit|activate|close|cancel|progress
 pjt task add|list|show|edit|ready|start|block|review|done|cancel|assign|unassign
           |depend|undepend|label|unlabel|move|move-area|artifacts|related-updates
           |archive|restore|delete|history|set-parent|claim|release|related-interfaces
+          |next   （只读简报：下一个可开工的 task + 相关接口契约；不认领）
 pjt area add|list|show|tree|edit|archive|restore   （add/edit 支持 --path-pattern）
           |tasks|set-parent|set-owner|match-path|history|activity
 pjt artifact add|list|show|edit|attach|detach|remove|verify|history   （attach/detach 支持 --area）

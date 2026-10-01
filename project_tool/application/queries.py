@@ -7,6 +7,8 @@ from typing import Any, cast
 
 from project_tool.domain.enums import Lifecycle, MilestoneStatus, TaskStatus
 from project_tool.domain.errors import NotFound
+from project_tool.domain.interfaces import parse_front_matter
+from project_tool.domain.task import claim_view
 from project_tool.domain.timeutil import parse_time_spec
 from project_tool.graph.dependency import is_computed_blocked
 from project_tool.graph.project_graph import milestone_summary, task_summary
@@ -457,3 +459,239 @@ def _local_uncommitted(ctx, bindable, prefix: str) -> list[dict[str, Any]]:
 #
 # 判定逻辑在 `project_tool.domain.task`（领域层）——`project_graph` 和 `queries`
 # 互相依赖，认领判定被两边都要用，放应用层必然成环。这里只做转发。
+
+
+# ==================================================================== 接口契约相关
+
+
+def interface_rows(ctx) -> list[dict[str, Any]]:
+    """所有已登记的接口 Artifact + 其 front-matter 摘要（读不到就带 read_error）。
+
+    **一次扫描，两处复用**：`task.related_interfaces` 和 `task.next` 都需要
+    「接口 + 它的文档内容」。各自扫一遍会迟早分叉，所以收在这里。
+    """
+    rows: list[dict[str, Any]] = []
+    for record in ctx.store.list_raw("artifact", include_deleted=False):
+        metadata = record.get("metadata") or {}
+        if metadata.get("interface") is not True:
+            continue
+        if record.get("lifecycle") == Lifecycle.DELETED.value:
+            continue
+        row: dict[str, Any] = {
+            "artifact_id": record.get("id"),
+            "name": record.get("name"),
+            "locator": record.get("locator"),
+            # ⚠ front-matter 的 `area` 是**名字**；`area_id` 保持 id。
+            #   两者混用会导致按 area 匹配永远不成立。
+            "area": None,
+            "area_id": (record.get("related_area_ids") or [None])[0],
+            "status": None,
+            "consumers": [],
+            "readable": False,
+            "related_task_ids": list(record.get("related_task_ids") or []),
+        }
+        path = ctx.paths.root / str(record.get("locator") or "")
+        if not path.is_file():
+            row["read_error"] = "document not found"
+            rows.append(row)
+            continue
+        try:
+            data, _, error = parse_front_matter(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            row["read_error"] = str(exc)
+            rows.append(row)
+            continue
+        if error is not None:
+            row["read_error"] = error
+            rows.append(row)
+            continue
+        row["readable"] = True
+        row["name"] = data.get("name") or row["name"]
+        row["status"] = data.get("status")
+        row["area"] = data.get("area")
+        row["consumers"] = data.get("consumers") or []
+        rows.append(row)
+    return rows
+
+
+_REASON_ORDER = {"linked": 0, "same_area": 1, "mentioned": 2}
+
+
+def interfaces_for_task(
+    ctx,
+    task_id: str,
+    task_area_id: str | None,
+    task_text: str,
+    area_scope: bool = True,
+) -> list[dict[str, Any]]:
+    """和某个 task 相关的接口契约，按可信度排序。
+
+    三条来源，每条**标明为什么被带出来**：
+      linked     显式关联（`pjt artifact attach --task`），最准，是人明确说的
+      same_area  同 Area，结构上可能相关，不一定真相关
+      mentioned  接口名出现在 task 标题/描述里，弱信号
+
+    刻意不合并、不排成「最相关」一条 —— 那是替人做判断。
+    """
+    haystack = task_text.lower()
+    rows: list[dict[str, Any]] = []
+    for row in interface_rows(ctx):
+        entry = {key: value for key, value in row.items() if key != "related_task_ids"}
+        if task_id in row["related_task_ids"]:
+            entry["reason"] = "linked"
+        elif area_scope and task_area_id and row["area_id"] == task_area_id:
+            entry["reason"] = "same_area"
+        elif row.get("name") and str(row["name"]).lower() in haystack:
+            entry["reason"] = "mentioned"
+        else:
+            continue
+        rows.append(entry)
+    rows.sort(
+        key=lambda item: (_REASON_ORDER.get(item["reason"], 9), str(item.get("name") or ""))
+    )
+    return rows
+
+
+# ==================================================================== next（开工简报）
+
+#: 可以开工的状态。`doing` 不在其中 —— 那说明已经有人在做了，
+#: 把它列进「下一步」等于推荐和别人撞车。
+WORKABLE_STATUSES = (TaskStatus.INBOX, TaskStatus.READY, TaskStatus.BLOCKED)
+
+#: 优先级排序（小的先做）。critical 排在 high 前面。
+_PRIORITY_ORDER = {"critical": 0, "high": 1, "normal": 2, "low": 3}
+
+
+def task_next(
+    ctx,
+    area=None,
+    include_claimed: bool = False,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """下一件该做的事 + 开工简报（**只读**，不做任何写入）。
+
+    为什么值得做成一条命令：agent 开工前的正确顺序是固定的
+    「找活 → 认领 → **读契约** → 看这块最近谁在动」，而漏掉第三步的代价最大
+    —— agent 没有隐性知识，它不知道某个接口什么时候能改、什么算破坏性变更。
+    把只读的那部分收进一条命令，就不容易漏。
+
+    刻意**不**在这里顺带 claim：认领是一个决定，不是查询的一部分。
+    「看一眼」和「占下来」应该分开，否则想看不能看、想占得先查一遍。
+
+    选择顺序（确定性，不随机）：
+      1. 未被认领优先（过期的不算占用）
+      2. 未被阻塞优先
+      3. 优先级 critical > high > normal > low
+      4. 创建早的优先（老坑先填）
+    """
+    wanted_area = ctx.area_id(area) if area else None
+    tasks = ctx.tasks_by_id(include_deleted=False)
+    now = datetime.now().astimezone()
+
+    candidates: list[tuple[tuple, Any, dict[str, Any]]] = []
+    skipped_claimed = 0
+    for task in tasks.values():
+        if task.lifecycle != Lifecycle.ACTIVE or task.status not in WORKABLE_STATUSES:
+            continue
+        if wanted_area is not None and task.area_id != wanted_area:
+            continue
+        active_claim = claim_view(task.claim, now)
+        if active_claim is not None:
+            skipped_claimed += 1
+            if not include_claimed:
+                continue
+        blocked, blockers = is_computed_blocked(task, tasks)
+        candidates.append(
+            (
+                (
+                    active_claim is not None,   # False(0) 优先于 True(1)
+                    blocked,                    # 未阻塞优先
+                    _PRIORITY_ORDER.get(task.priority.value, 9),
+                    task.created_at,
+                    task.id,
+                ),
+                task,
+                {"blocked": blocked, "blockers": blockers, "claim": active_claim},
+            )
+        )
+
+    if not candidates:
+        return {
+            "found": False,
+            "task": None,
+            "reason": _no_candidate_reason(wanted_area, skipped_claimed),
+            "candidates": 0,
+            "skipped_claimed": skipped_claimed,
+            "interfaces": [],
+            "area_note": None,
+        }
+
+    candidates.sort(key=lambda item: item[0])
+    _, chosen, facts = candidates[0]
+    record = ctx.task_view(chosen)
+    return {
+        "found": True,
+        "task": record,
+        "reason": _why_chosen(chosen, facts, wanted_area),
+        "candidates": len(candidates),
+        "skipped_claimed": skipped_claimed,
+        "interfaces": interfaces_for_task(
+            ctx,
+            chosen.id,
+            chosen.area_id,
+            f"{chosen.title} {chosen.description}",
+        ),
+        "area_note": _area_note(ctx, chosen.area_id),
+        "next_step": (
+            f"pjt task claim {record['id']} --agent <handle>   "
+            "# 认领之后才开始改；先读上面的 interfaces"
+        ),
+    }
+
+
+def _why_chosen(task, facts, wanted_area) -> str:
+    bits = [f"status={task.status.value}", f"priority={task.priority.value}"]
+    if wanted_area is not None:
+        bits.append("在指定 area 内")
+    if facts["blocked"]:
+        # 进得了候选说明依赖已满足（否则 computed_blocked 会把它排掉）
+        bits.append("依赖已满足")
+    if facts["claim"] is None:
+        bits.append("无人认领")
+    else:
+        bits.append(f"原认领已过期（原主 {facts['claim']['member_id'][:12]}…）")
+    return "，".join(bits)
+
+
+def _no_candidate_reason(wanted_area, skipped_claimed) -> str:
+    where = f"（area={wanted_area}）" if wanted_area else ""
+    if skipped_claimed:
+        return (
+            f"没有可开工的任务{where}，但有 {skipped_claimed} 个已被认领。"
+            "加 --include-claimed 可以看见它们，或等认领过期。"
+        )
+    return (
+        f"没有可开工的任务{where}。"
+        "可开工 = 状态为 inbox/ready/blocked、lifecycle=active、依赖已满足。"
+    )
+
+
+def _area_note(ctx, area_id) -> dict[str, Any] | None:
+    """这块最近谁在动 —— 但**只报已提交历史**，并说明未提交改动看不见。
+
+    刻意不在这里塞 git log 的细节：`area.activity` 已经管那件事了，
+    这里只提醒「别以为看到了全部」。
+    """
+    if not area_id:
+        return None
+    record = ctx.store.get_raw("area", area_id) or {}
+    return {
+        "area_id": area_id,
+        "area": record.get("name"),
+        "owners": list(record.get("owner_ids") or []),
+        "see": "pjt area activity --days 3   # 看这块最近谁在动",
+        "caveat": (
+            "已提交历史跟着 Git 走，所有人都能看到；"
+            "**未提交改动只有本机可见**——看不到别人的在途工作。"
+        ),
+    }

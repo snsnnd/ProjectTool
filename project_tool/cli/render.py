@@ -435,6 +435,44 @@ def render_interface_check(result: dict[str, Any]) -> None:
     )
 
 
+def render_task_next(result: dict[str, Any]) -> None:
+    if not result.get("found"):
+        console.print(f"[dim]{result.get('reason', 'no candidate')}[/dim]")
+        return
+
+    task = result["task"]
+    console.print(f"[bold]{task['id']}[/bold]  {task['title']}")
+    console.print(
+        f"  [dim]{task['status']} · {task['priority']} · 选中原因: {result['reason']}[/dim]"
+    )
+    if task.get("computed_blocked"):
+        console.print(f"  [yellow]blocked by {', '.join(task.get('blocked_by') or [])}[/yellow]")
+
+    interfaces = result.get("interfaces") or []
+    if interfaces:
+        console.print("\n  [bold]Read these before you change anything[/bold]")
+        for row in interfaces:
+            label = REASON_LABEL.get(row.get("reason", ""), row.get("reason", ""))
+            console.print(f"    {label}  {row.get('name')}  [dim]{row.get('status')}[/dim]")
+            if row.get("read_error"):
+                console.print(f"        [red]{row['read_error']}[/red]")
+            if row.get("consumers"):
+                consumers = ", ".join(str(c) for c in row["consumers"])
+                console.print(f"        [dim]consumers: {consumers}[/dim]")
+            console.print(f"        [dim]{row.get('locator')}[/dim]")
+    else:
+        console.print("\n  [dim]no interface contracts linked to this task[/dim]")
+
+    note = result.get("area_note")
+    if note:
+        console.print(f"\n  [dim]area: {note.get('area')} ({note.get('see')})[/dim]")
+        console.print(f"  [dim]{note.get('caveat')}[/dim]")
+    if result.get("skipped_claimed"):
+        console.print(f"  [dim](另外 {result['skipped_claimed']} 个已被认领，未列入)[/dim]")
+
+    console.print(f"\n  [green]{result.get('next_step', '')}[/green]")
+
+
 REASON_LABEL = {
     "linked": "[green]linked[/green]",
     "same_area": "[cyan]same area[/cyan]",

@@ -133,6 +133,13 @@ def build_registry(service) -> dict[str, MethodSpec]:
         ),
         MethodSpec("task.release", tasks.task_release, True, "task", "release a claim"),
         MethodSpec(
+            "task.next",
+            tasks.task_next,
+            False,
+            "task",
+            "next workable task + a read-only briefing (read-only)",
+        ),
+        MethodSpec(
             "task.related_interfaces",
             tasks.task_related_interfaces,
             False,

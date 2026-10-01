@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, cast
 
+from project_tool.application import queries
 from project_tool.application.context import (
     UNSET,
     ServiceContext,
@@ -16,7 +17,6 @@ from project_tool.domain.artifact import Artifact
 from project_tool.domain.enums import DependencyRelation, Lifecycle, Priority, TaskStatus
 from project_tool.domain.errors import Claimed, DependencyCycle, InvalidArgument, NotFound
 from project_tool.domain.ids import new_id
-from project_tool.domain.interfaces import parse_front_matter
 from project_tool.domain.task import Claim, Dependency, Task, claim_view
 from project_tool.domain.timeutil import now_local
 from project_tool.domain.update import Update
@@ -416,53 +416,25 @@ class TaskService:
         return weight
 
     def task_related_interfaces(self, task_id, area_scope: bool = True) -> dict[str, Any]:
-        """和这个 task 相关的接口契约（**派生读，不建索引**）。
+        """和这个 task 相关的接口契约（派生读，不建索引）。
 
         为什么需要：agent 没有隐性知识 —— 它不知道 `store.updateModel` 什么时候
         能改、什么算破坏性变更。人靠记忆和口口相传，agent 只能读文档。
         所以「这个 task 碰了哪些契约」必须在**动手之前**就摆在它面前。
 
-        三条来源，**可信度递减**：
-
-        1. **显式关联**：Artifact（interface）的 `related_task_ids` 含本 task
-           —— `pjt artifact attach --task`，最准确，是人明确说的
-        2. **同 Area**：接口 front-matter 的 `area` == task 的 area
-           —— 结构上的可能相关，不一定真相关，所以标 `reason="same_area"`
-        3. **正文提及**：接口名出现在 task 标题/描述里
-           —— 弱信号，只用来提示，标 `reason="mentioned"`
-
-        每条都带 `reason`，让调用方自己决定信多少。**工具不合并、不排序成
-        「最相关」** —— 那等于替人做判断。
+        扫描实现在 `queries.interfaces_for_task`，和 `task.next` 共用 ——
+        各自扫一遍迟早分叉。
         """
-        full_id = self.ctx.resolve_ref("task", task_id, allow_deleted=True)
-        task = self.ctx.load("task", full_id)
-        haystack = f"{task.title} {task.description}".lower()
-
-        rows: list[dict[str, Any]] = []
-        for record in self.ctx.store.list_raw("artifact", include_deleted=False):
-            metadata = record.get("metadata") or {}
-            if metadata.get("interface") is not True:
-                continue
-            if record.get("lifecycle") == Lifecycle.DELETED.value:
-                continue
-            entry = self._interface_row(record)
-            if entry is None:
-                continue
-            if full_id in (record.get("related_task_ids") or []):
-                entry["reason"] = "linked"
-                rows.append(entry)
-            elif area_scope and task.area_id and entry.get("area_id") == task.area_id:
-                entry["reason"] = "same_area"
-                rows.append(entry)
-            elif entry.get("name") and str(entry["name"]).lower() in haystack:
-                entry["reason"] = "mentioned"
-                rows.append(entry)
-
-        # 显式关联排前面，其次同 Area，最后正文提及
-        order = {"linked": 0, "same_area": 1, "mentioned": 2}
-        rows.sort(key=lambda item: (order.get(item["reason"], 9), str(item.get("name") or "")))
+        task = self.ctx.load("task", task_id)
+        rows = queries.interfaces_for_task(
+            self.ctx,
+            task.id,
+            task.area_id,
+            f"{task.title} {task.description}",
+            area_scope=area_scope,
+        )
         return {
-            "task_id": full_id,
+            "task_id": task.id,
             "count": len(rows),
             "interfaces": rows,
             "note": (
@@ -471,41 +443,11 @@ class TaskService:
             ),
         }
 
-    def _interface_row(self, record: dict[str, Any]) -> dict[str, Any] | None:
-        """从 Artifact + 它的 markdown 里抽出接口摘要（读不到就返回 None）。"""
-        from pathlib import Path
-
-        locator = str(record.get("locator") or "")
-        row: dict[str, Any] = {
-            "artifact_id": record.get("id"),
-            "name": record.get("name"),
-            "locator": locator,
-            "area_id": (record.get("related_area_ids") or [None])[0],
-            "status": None,
-            "consumers": [],
-            "readable": False,
-        }
-        path = self.ctx.paths.root / locator
-        if not path.is_file():
-            row["read_error"] = "document not found"
-            return row
-        try:
-            text = Path(path).read_text(encoding="utf-8")
-        except OSError as exc:
-            row["read_error"] = str(exc)
-            return row
-        data, _, error = parse_front_matter(text)
-        if error is not None:
-            row["read_error"] = error
-            return row
-        row["readable"] = True
-        row["name"] = data.get("name") or row["name"]
-        row["status"] = data.get("status")
-        # ⚠ front-matter 的 `area` 是**名字**，而 `area_id` 必须保持 id ——
-        # 上面按 area 匹配时要拿它和 task.area_id 比。混用会导致永远匹配不上。
-        row["area"] = data.get("area")
-        row["consumers"] = data.get("consumers") or []
-        return row
+    def task_next(self, area=None, include_claimed: bool = False) -> dict[str, Any]:
+        """下一件该做的事 + 开工简报（**只读**，不做任何写入）。"""
+        return queries.task_next(
+            self.ctx, area=area, include_claimed=include_claimed
+        )
 
     # ------------------------------------------------------------- 认领
 

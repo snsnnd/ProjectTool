@@ -23,7 +23,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（271 passed）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
-  **Artifact** / Link；Service 123 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
+  **Artifact** / Link；Service 124 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
   `link.map_local_path`/`unmap_local_path` + V1-C 的 `area.set_owner`、`area.activity` 与 6 个 `interface.*`）。V1-C 进行中：派生缓存治理 + Area owner + 接口契约 + Area 活跃度推导。
 - 真实使用：EFW Studio（`framework@tmp/new` 的 `new/efw`）已完成两轮 dogfooding，零源码污染；
   数据保留在 `new/efw/.pjt`。报告：`dogfooding/report.md`（V0.1）、
@@ -85,6 +85,21 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
     所有人都能看到；`git status` 只有本机能看。`area activity` 因此把两者
     分开输出并标 "THIS machine only"。**不要**把两者混成一张「谁在做什么」
     的表——那会让人以为缺席就是没人在动。
+
+19. **多 agent 开工用 `pjt task next`**，它是**只读**的简报，不认领任何东西：
+
+    ```bash
+    pjt task next [--area X] [--include-claimed]
+    ```
+
+    它一次给全：下一个可开工的 task（未被阻塞、依赖已满足、无人认领）、
+    **这个 task 相关的接口契约**（`linked` / `same_area` / `mentioned`）、
+    以及这块最近该看谁。**先读契约再动手** —— agent 没有隐性知识，
+    它不知道 `store.updateModel` 什么时候能改、什么算破坏性变更。
+    读完再 `pjt task claim <id> --agent <handle>`，认领了才开始改。
+
+    为什么认领要单独一步：认领是一个**决定**，不是查询的一部分。
+    想看不能看、想占得先查一遍，那是设计缺陷。
 
 ## 3. 常用命令
 

@@ -330,6 +330,10 @@ git log --name-only --since=N.days.ago
   同一个人重复 claim = 续期，且保留原 `claimed_at`
 - 查询：`pjt task list --unclaimed`（给我一件没人做的事）、
   `--claimed-by <handle>`；`task.get` / `task.list` 带 `claim` + `claimed`
+- **`pjt task next` 是只读简报，不做任何写入**：给下一个可开工的 task +
+  相关接口契约 + 这块最近该看谁。**刻意不在这条命令里顺带 claim** ——
+  认领是决定，不是查询的一部分。「看一眼」和「占下来」必须分开，
+  否则想看不能看、想占得先查一遍。
 
 ### 4.7c 接口契约（V1-C：固定模板的 markdown）
 
