@@ -290,7 +290,14 @@ def area_activity(ctx, days: int = 7, limit: int = 200, area=None) -> dict[str, 
 
     # git root 相对 project root 的前缀（EFW 场景：.pjt 在 new/efw 下）
     prefix = _project_subdir_prefix(ctx, repo)
-    commits = repo.log(limit=max(1, int(limit)), with_files=True, since=f"{window}.days.ago")
+    # 空仓库上 `git log` 会直接失败。**空历史不等于 git 不可用**——新项目刚
+    # `pjt init` 还没提交过是正常状态，应该照常返回「所有 Area 都没有活动」，
+    # 而不是抛 traceback。
+    commits = (
+        repo.log(limit=max(1, int(limit)), with_files=True, since=f"{window}.days.ago")
+        if repo.has_commits()
+        else []
+    )
 
     members = ctx.store.list_raw("member")
     identity = _member_by_git_identity(members)

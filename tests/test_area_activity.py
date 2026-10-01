@@ -246,3 +246,46 @@ def test_cli_json_shape(svc_repo, repo):
     assert payload["available"] is True
     assert payload["days"] == 7
     assert {row["name"] for row in payload["areas"]} == {"core", "ui", "tools"}
+
+def test_activity_on_a_repo_with_no_commits_does_not_crash(tmp_path):
+    """回归：`pjt init` 后还没提交过是正常状态。
+
+    `git log` 在空仓库上直接 exit != 0，而 `area.activity` 原来只对
+    `detect()` 做了保护，于是抛 traceback。**空历史不等于 git 不可用**——
+    应该照常返回「所有 Area 都没活动」。
+    """
+    root = tmp_path / "fresh"
+    root.mkdir()
+    git(root.parent, "init", "-q", "-b", "main", str(root))
+    init_project(root, name="Fresh")
+    svc = ProjectService(open_project(root))
+    svc.call("area.create", {"name": "core", "path_patterns": ["src/**"]})
+
+    result = svc.call("area.activity", {"days": 7})
+    assert result["available"] is True, "空历史不该被当成 git 不可用"
+    assert result["scanned_commits"] == 0
+    core = next(row for row in result["areas"] if row["name"] == "core")
+    assert core["active"] is False
+
+
+def test_cli_activity_on_a_fresh_repo_exits_cleanly(tmp_path):
+    root = tmp_path / "fresh2"
+    root.mkdir()
+    git(root.parent, "init", "-q", "-b", "main", str(root))
+    init_project(root, name="Fresh2")
+    result = invoke(["-C", str(root), "area", "activity"])
+    assert result.exit_code == 0, result.output
+    assert "Traceback" not in result.output
+
+
+def test_has_commits_is_false_on_an_empty_repo(tmp_path):
+    from project_tool.integrations.git import detect
+
+    root = tmp_path / "empty"
+    root.mkdir()
+    git(root.parent, "init", "-q", "-b", "main", str(root))
+    assert detect(root).has_commits() is False
+    (root / "f.txt").write_text("x\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "first")
+    assert detect(root).has_commits() is True

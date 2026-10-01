@@ -215,6 +215,18 @@ class GitRepo:
             )
         return commits
 
+    def has_commits(self) -> bool:
+        """HEAD 是否有 commit。`git log` 在空仓库上会直接报错（exit != 0）。
+
+        用 `rev-parse --verify HEAD` 探测，而不是去匹配 git 的错误文本——
+        匹配文案等于把实现细节抄进业务代码，git 改个措辞就失效。
+        """
+        try:
+            self.run("rev-parse", "--verify", "HEAD")
+        except GitUnavailable:
+            return False
+        return True
+
     def commit_body(self, sha: str) -> dict[str, Any]:
         """取单个 commit 的完整 message 并解析 trailer。"""
         text = self.run("show", "-s", "--format=%H%x1f%an%x1f%aI%x1f%B", sha)
