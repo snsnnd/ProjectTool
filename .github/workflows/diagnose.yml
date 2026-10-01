@@ -21,25 +21,19 @@ jobs:
           python-version: "3.12"
       - run: uv sync
       - name: Run
-        run: uv run pytest -rf --tb=long -p no:cacheprovider tests/test_multiagent_flow.py
-      - name: Publish failure
-        if: failure()
+        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path diag | Out-Null
-          "exit=$LASTEXITCODE" | Out-File diag/summary.txt
-          Write-Host "see diag/ on branch ci-diagnostics"
+          uv run pytest -rf --tb=long -p no:cacheprovider tests/test_multiagent_flow.py 2>&1 |
+            Tee-Object -FilePath pytest-output.txt
+          "exit=$LASTEXITCODE" | Out-File -FilePath pytest-output.txt -Append
       - name: Push diagnostics
         if: failure()
         shell: pwsh
         run: |
           git config user.name ci
           git config user.email ci@example.com
-          git checkout --orphan ci-diagnostics
-          git rm -r --cached . -q 2>$null
-          Remove-Item -Recurse -Force * -Exclude .git -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path diag | Out-Null
-          Copy-Item .github/workflows/ci.yml diag/ci.yml -ErrorAction SilentlyContinue
-          "run id: ${{ github.run_id }}" | Out-File diag/meta.txt
-          git add -A
+          git switch --orphan ci-diagnostics
+          git reset -q
+          git add pytest-output.txt
           git commit -m "diagnostics: windows multiagent failure"
           git push -f origin ci-diagnostics
