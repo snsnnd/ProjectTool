@@ -131,6 +131,11 @@ def test_system_cli_lists_every_command_with_a_resolvable_method(tmp_path):
     assert len(commands) > 100, f"only {len(commands)} commands found"
     for command in commands:
         targets = ([command["method"]] if command["method"] else []) + command.get("also_calls", [])
+        assert targets, (
+            f"{command['path']} 既没有 method 也没有 also_calls："
+            f"CLI_METHOD_MAP 漏登记了。system.cli 是对外的机器可读命令面"
+            f"（KC 靠它发现命令），漏登记的命令在别人眼里就没有落点。"
+        )
         for target in targets:
             assert target in available, f"{command['path']} -> {target} not in registry"
         assert command["summary"], f"{command['path']} has no summary (missing docstring?)"
