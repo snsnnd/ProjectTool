@@ -20,11 +20,18 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 - 提交线：`6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding 报告
   → `779a886` 统一 expected_rev → `d73a492` Area → `52e1a9f` Artifact
   → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层。
-- 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（271 passed）；
+- 质量门槛：`uv run ruff check .`、`uv run mypy project_tool`、`uv run pytest`（558 passed）；
   CI 覆盖 Ubuntu + Windows。
 - 对象：Project / Goal / Milestone / **Area** / Task / Member / Update / Decision /
-  **Artifact** / Link；Service 124 个 method，**CLI 全部触达**（V1-B.2 补齐最后 12 个 +
-  `link.map_local_path`/`unmap_local_path` + V1-C 的 `area.set_owner`、`area.activity` 与 6 个 `interface.*`）。V1-C 进行中：派生缓存治理 + Area owner + 接口契约 + Area 活跃度推导。
+  **Artifact** / Link；Service **123** 个 method，CLI 命令 **117** 个（+ 12 个分组），
+  **112 个 method 有 CLI 入口**。剩下 11 个分两类，都不是 bug：
+  4 个**有意只给 API**（`system.capabilities` / `system.cli` / `system.info` 给程序用，
+  `project.open` 是内部基础设施），2 个**通过 flag 或共享渲染可达**（`project.recover`
+  = `pjt doctor --repair`，`git.available` = `pjt git status` 的可用性判定），
+  剩下 **5 个是真空缺口**：`log.get` / `log.entity` / `log.member` / `log.since`
+  / `graph.dependencies` —— 有实现、能调用，但用户手边没有命令。V1-C 收尾时
+  `task next/claim/release/related-interfaces` 也曾漏登记进 `CLI_METHOD_MAP`，
+  由 `tests/test_registry.py` 的「必须解析出至少一个 method」断言堵住。
 - 真实使用：EFW Studio（`framework@tmp/new` 的 `new/efw`）已完成两轮 dogfooding，零源码污染；
   数据保留在 `new/efw/.pjt`。报告：`dogfooding/report.md`（V0.1）、
   `dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`（V1-A）。
