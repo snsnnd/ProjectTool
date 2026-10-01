@@ -15,7 +15,14 @@ from project_tool.application.context import (
 )
 from project_tool.domain.artifact import Artifact
 from project_tool.domain.enums import DependencyRelation, Lifecycle, Priority, TaskStatus
-from project_tool.domain.errors import Claimed, DependencyCycle, InvalidArgument, NotFound
+from project_tool.domain.errors import (
+    Claimed,
+    DependencyCycle,
+    InvalidArgument,
+    NotFound,
+    ProjectToolError,
+    RevisionConflict,
+)
 from project_tool.domain.ids import new_id
 from project_tool.domain.task import Claim, Dependency, Task, claim_view
 from project_tool.domain.timeutil import now_local
@@ -493,20 +500,53 @@ class TaskService:
             expires_at=expires,
             note=optional_text(note, "note"),
         )
-        self.ctx.save(
-            task,
-            base,
-            "task.claimed",
-            {
-                "member_id": member_id,
-                "expires_at": expires.isoformat(),
-                "ttl_minutes": minutes,
-                "renewed": renewed,
-            },
-        )
+        try:
+            self.ctx.save(
+                task,
+                base,
+                "task.claimed",
+                {
+                    "member_id": member_id,
+                    "expires_at": expires.isoformat(),
+                    "ttl_minutes": minutes,
+                    "renewed": renewed,
+                },
+            )
+        except RevisionConflict as conflict:
+            # 事务层的 base_rev 校验**先于**本方法的认领校验触发。所以两个 agent
+            # 真抢同一个 task 时，输的那个拿到的本来是 REVISION_CONFLICT ——
+            # 而它该得到的是 CLAIMED。
+            #
+            # 这个区分是整个流程的关键：CLAIMED = 换任务，REVISION_CONFLICT = 重试。
+            # 分不出来的话，agent 就只能盲目重试，正好浪费在「被人认领」这种
+            # 重试也没用的场景上。多 agent 演示脚本实测到了这个缺口。
+            self._raise_claimed_if_taken(task.id, member_id, conflict)
+            raise
+
         # 返回 task_view 而不是 save 的原始 record：认领的有效性是**派生**的，
         # 调用方不该拿到一个「看起来还没生效」的 claim 字段
         return self.ctx.task_view(task)
+
+    def _raise_claimed_if_taken(self, task_id, member_id, conflict) -> None:
+        """重读一次：如果现在**别人**的有效认领挡在那里，就把冲突改写成 `CLAIMED`。
+
+        只有确认了「确实是被别人认领走」才改写；其它原因（有人改了标题、
+        加了依赖……）仍然是原来的 `REVISION_CONFLICT`，不吞掉。
+        """
+        try:
+            latest = self.ctx.load("task", task_id)
+        except ProjectToolError:
+            raise conflict from None
+        holder = claim_view(latest.claim)
+        if holder is None or holder["member_id"] == member_id:
+            raise conflict
+        raise Claimed(
+            f"task {task_id} was claimed by someone else while you were claiming it "
+            f"(held until {holder['expires_at']}); pick another task",
+            member_id=holder["member_id"],
+            expires_at=holder["expires_at"],
+            task_id=task_id,
+        ) from None
 
     def task_release(self, task_id, member=None) -> dict[str, Any]:
         """放弃认领。只有认领者本人（或未指定 member 时当前 actor）能放。"""

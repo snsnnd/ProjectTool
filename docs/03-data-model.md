@@ -328,6 +328,12 @@ git log --name-only --since=N.days.ago
   和 `state.json` / `labels.json` 一样不存在陈旧状态
 - 别人已认领时 `task.claim` 报 `CLAIMED`（退出码 6），**不覆盖**。
   同一个人重复 claim = 续期，且保留原 `claimed_at`
+- **竞态下输的一方拿到的也是 `CLAIMED`**，不是 `REVISION_CONFLICT`。这需要额外处理：
+  事务层的 `base_rev` 校验**先于**认领校验触发，所以直接抛出来的是 rev 冲突。
+  `task_claim` 捕获它、重读一次，**确认了「确实被别人认领走」**才改写成 `CLAIMED`；
+  其它原因（有人改了标题、加了依赖）仍然是原来的 `REVISION_CONFLICT`，不吞掉。
+  这个区分是流程成立的前提：`CLAIMED` = 换任务，`REVISION_CONFLICT` = 重试。
+  （多 agent 演示脚本实测抓到的缺口，见 `dogfooding/scripts/multiagent_demo.py`）
 - 查询：`pjt task list --unclaimed`（给我一件没人做的事）、
   `--claimed-by <handle>`；`task.get` / `task.list` 带 `claim` + `claimed`
 - **`pjt task next` 是只读简报，不做任何写入**：给下一个可开工的 task +

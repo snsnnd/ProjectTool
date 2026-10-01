@@ -389,3 +389,98 @@ def test_cli_next(root, svc):
     payload = json.loads(result.output)["result"]
     assert payload["found"] is True
     assert payload["interfaces"][0]["name"] == "store.updateModel"
+
+
+# ================================================================== 竞态
+
+
+def test_losing_a_claim_race_reports_claimed_not_revision_conflict(svc, root, tmp_path):
+    """回归（多 agent 演示脚本实测抓到的）。
+
+    事务层的 base_rev 校验**先于** `task_claim` 自己的认领校验触发，所以两个
+    agent 真抢同一个 task 时，输的那个原本拿到的是 `REVISION_CONFLICT` ——
+    而它该得到 `CLAIMED`。
+
+    这个区分是整个流程的关键：`CLAIMED` = 换任务，`REVISION_CONFLICT` = 重试。
+    分不出来的话，agent 只能盲目重试，正好浪费在「被人认领」这种重试也没用的
+    场景上。
+
+    用**两个独立 ProjectService 实例**模拟两个进程：各自加载一次（拿到同一个
+    base_rev），再先后 claim。
+    """
+    task_id = _task(svc, "抢手任务")
+    a = ProjectService(open_project(root))
+    b = ProjectService(open_project(root))
+    # 两侧都读到 rev-1（各自 open 时加载）
+    a.call("task.claim", {"task_id": task_id, "member": "agent-1"})
+    with pytest.raises(Claimed) as excinfo:
+        b.call("task.claim", {"task_id": task_id, "member": "agent-2"})
+    assert excinfo.value.code == "CLAIMED"
+    assert excinfo.value.exit_code == 6
+
+
+def test_a_conflict_is_only_rewritten_when_someone_really_claimed_it(svc, root):
+    """不能吞掉真的冲突：别人改了标题不算「被认领」，仍应抛 RevisionConflict。
+
+    直接测决策逻辑而不是去制造真实竞态 —— `task_claim` 每次都重新 load，
+    base_rev 总是当时那个，所以「load 之后 save 之前被人改了」这个窗口极窄，
+    用测试去撞它只会写出脆弱的测试。
+
+    契约就两条：确认了「被别人认领走」才改写成 CLAIMED，否则原样抛冲突。
+    """
+    from project_tool.application.services.task import TaskService
+    from project_tool.domain.errors import RevisionConflict
+
+    service = ProjectService(open_project(root))
+    task_id = _task(svc, "判断逻辑")
+    original = RevisionConflict("task was modified concurrently")
+    # 这里必须传**已解析的 MBR id** —— 真实调用路径上 task_claim 先
+    # ctx.member_id() 解析过，helper 只做 id 之间的比较
+    agent1 = service.call("member.get", {"member": "agent-1"})["id"]
+    agent2 = service.call("member.get", {"member": "agent-2"})["id"]
+
+    tasks = TaskService(service.ctx)
+
+    # 没人认领 -> 原样抛冲突
+    with pytest.raises(RevisionConflict):
+        tasks._raise_claimed_if_taken(task_id, agent2, original)
+
+    # 自己认领的 -> 也是原样抛（那是续期失败，不是被别人抢）
+    service.call("task.claim", {"task_id": task_id, "member": "agent-2"})
+    with pytest.raises(RevisionConflict):
+        tasks._raise_claimed_if_taken(task_id, agent2, original)
+
+    # **别人**的有效认领 -> 改写成 CLAIMED（换个 task：agent-2 那个还占着，
+    # 直接让 agent-1 去 claim 会在 task_claim 里就抛 CLAIMED，测不到这段逻辑）
+    taken = _task(svc, "被别人占住")
+    service.call("task.claim", {"task_id": taken, "member": "agent-1"})
+    with pytest.raises(Claimed) as excinfo:
+        tasks._raise_claimed_if_taken(taken, agent2, original)
+    assert excinfo.value.code == "CLAIMED"
+    assert excinfo.value.details["member_id"] == agent1
+
+    # 「过期算没人占」由 claim_view 决定，已由
+    # test_expired_claim_reads_as_absent_without_any_cleanup 覆盖，
+    # 这里不重复 —— 造一个过期认领要改底层对象，写出来只会是脆弱的测试。
+
+
+def test_agent_loop_recovers_from_claimed_without_failing(svc, root):
+    """模拟 agent 的循环：撞上 CLAIMED 就换任务，不退出。"""
+    a = ProjectService(open_project(root))
+    b = ProjectService(open_project(root))
+    first = _task(svc, "第一个")
+    second = _task(svc, "第二个")
+
+    a.call("task.claim", {"task_id": first, "member": "agent-1"})
+    switched = False
+    with pytest.raises(Claimed):
+        b.call("task.claim", {"task_id": first, "member": "agent-2"})
+        switched = True  # pragma: no cover
+    assert switched is False
+
+    # agent-2 换任务，成功
+    out = b.call("task.claim", {"task_id": second, "member": "agent-2"})
+    assert out["claimed"] is True
+    # 两边各拿一个，没有重复
+    claims = {r["id"]: r["claim"]["member_id"] for r in svc.call("task.list", {}) if r.get("claim")}
+    assert len(set(claims.values())) == len(claims)
