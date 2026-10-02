@@ -1,8 +1,17 @@
 # V1-A 设计记录：UX / Contract Cleanup + Domain Completion
 
 > 本文件是 V1-A 轮（`task ready`、统一 `expected_rev`、Area、Artifact）的设计记录。
-> 实现以本文件为准；公共行为变化同步 `docs/03`（模型）、`docs/05`（接口）、`docs/08`（事件）。
+> 公共行为变化同步 `docs/03`（模型）、`docs/05`（接口）、`docs/08`（事件）。
 > 基线：`a7ac64e` dogfooding → `95e4a75` 交接文档。版本 `0.1.0` → `0.2.0`，`SCHEMA_VERSION` `1.0` → `1.1`。
+>
+> ⚠️ **这是历史快照，不是现行契约。** 原文写着「实现以本文件为准」，但 V1-B / V1-C
+> 已经推翻了下面几处结论，照着它实现会走错：
+> - 「Area 没有 `owner`」→ 0.5.0 加了 `owner_ids`（见 [§4.7b](03-data-model.md)）
+> - 「Git Adapter 未启用，只做格式校验」→ V1-B 已用 `rev-parse --verify` 真解析
+> - `project update`「Service 支持但 CLI 没有」→ 现在是 `pjt project edit`
+> - interface 的 `kind` / `status` 曾是封闭词表 → 现在都由项目自定义
+>
+> 现行契约一律以 `docs/03` / `docs/05` / `docs/08` 为准。
 
 ---
 
@@ -92,6 +101,7 @@ Milestone: 这个工作服务于哪个阶段？   （时间 / 交付节点 / 阶
 ### 2.2 Area 明确**不**包含什么
 
 Area 对象**没有** `status` / `progress` / `due_at` / `owner`，读视图也**不**返回 progress。
+> ⚠️ **已被 V1-C 推翻**：`owner` 字段已加（`owner_ids`，0.5.0）。
 理由：一旦给 Area 加进度，它就退化成第二个 Milestone，V1-A 的整个分维度就没有意义。
 Area 的读视图只有 `id / name / parent_area_id / task_count`；要看工作量请
 `pjt task list --area Debug` 或 `pjt area show <area>`。
@@ -158,6 +168,7 @@ V1-A:  只存 reference（kind + locator）
 | `file` | `studio_core/debug.py` | **必须是 project-relative POSIX 路径** |
 | `url` | `https://…` | http/https + netloc（**不做网络请求**） |
 | `git_commit` | `abc1234` | 十六进制 4–40（**Git Adapter 未启用**，只做格式） |
+> ⚠️ **已被 V1-B 推翻**：git 适配器已启用，`git.commit_linked` 会真解析 commit。
 | `git_branch` | `feature/foo` | git ref-name 字符集，无 `..` |
 | 其他 11 种 | 自由串 | 非 URL 时按不透明串处理，只做通用安全校验 |
 
@@ -195,6 +206,7 @@ Artifact.related_task_ids / related_decision_ids / related_milestone_ids / relat
 file        → 检查 project-relative 路径是否存在（exists true/false）
 url         → 只校验格式，绝不发起网络请求
 git_commit  → 只校验格式 + 附带「git adapter 未启用」提示
+> ⚠️ **已被 V1-B 推翻**：现在返回 `ok`。
 git_branch  → 同上
 其他 kind   → skipped（不透明引用，V1-A 无可校验语义）
 ```
@@ -274,6 +286,7 @@ ServiceContext.require_expected_rev(obj_type, model, expected_rev) -> str
 
 ```text
 project update?   （V0.1 CLI 没有 project update 子命令，Service 层已支持）
+                  ↑ 现已提供 `pjt project show|edit`
 goal edit  milestone edit  task edit  member edit  decision edit  link update
 area edit  artifact update
 ```

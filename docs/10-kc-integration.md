@@ -122,7 +122,7 @@ svc.call("system.capabilities", {})
 
 ```json
 { "protocol_version": 1, "schema_version": "1.1",
-  "methods": ["area.activity", "… 共 118 个 …"],
+  "methods": ["area.activity", "… 共 123 个 …"],
   "features": { "area": true, "artifact": true, "git": true,
                 "search": false, "web": false, "remote": false, "sync": false } }
 ```
@@ -134,7 +134,7 @@ svc.call("system.capabilities", {})
 
 ```python
 svc.call("system.cli", {})
-# {"count": 125,
+# {"count": 129,
 #  "commands": [{"path": ["area","set-owner"], "kind": "command",
 #                "method": "area.set_owner", "also_calls": [],
 #                "summary": "Add/remove the members responsible for an area.",
@@ -148,8 +148,8 @@ svc.call("system.cli", {})
 - `path` 是命令路径，`method` 是对应的 registry method
 - `pjt graph <scope>` 这类**按运行时分派到多个 method** 的命令，`method` 为
   `null`，实际会调的列在 `also_calls`
-- `method_to_paths` 是反向表：`task.set_status` 一条 method 对应 5 条命令
-  （`task start|block|review|done|cancel`）
+- `method_to_paths` 是反向表：`task.set_status` 一条 method 对应 6 条命令
+  （`task ready|start|block|review|done|cancel`）
 - `unmapped` 是"没对上 method 的可执行命令"，正常应为空 —— 非空说明映射表过期了。
   有测试守着：`tests/test_registry.py::test_every_cli_method_map_target_exists`
 
@@ -458,7 +458,7 @@ KC 上线前需要先定那部分，否则「一致」没有基准可比。
    （可重复；值里含 `=` 也没问题，只 split 一次）
 2. ✅ **`system.capabilities` 的 method 元信息** ——
    `svc.call("system.capabilities", {"detail": True})` 额外给出 `specs` /
-   `read_only_methods` / `mutating_methods`（**63 写 / 55 读**）。
+   `read_only_methods` / `mutating_methods`（**65 写 / 58 读**）。
    不传 `detail` 时形状不变，不破坏既有调用方。
 3. ✅ **完整 CLI 命令面** —— `svc.call("system.cli", {})`，见 §3
 
@@ -553,7 +553,7 @@ KC 的**增量价值**应该放在 GitHub 给不了的东西上：里程碑进�
 | `docs/01-overview.md` | 三个系统的分工、运行模式 |
 | `docs/03-data-model.md` | 对象字段与校验（§4.7b' 活跃度、§4.7c 接口契约、§4.7d 权限边界） |
 | `docs/04-storage.md` | 磁盘布局、事务协议、canonical vs 派生 |
-| `docs/05-interfaces.md` | 118 个 method、CLI、错误码、未来的 HTTP 映射 |
+| `docs/05-interfaces.md` | 123 个 method、CLI、错误码、未来的 HTTP 映射 |
 | `docs/08-events.md` | 事件契约 |
 | `AGENTS.md` | **接手本仓库必读的不变量**（红线的完整版） |
 

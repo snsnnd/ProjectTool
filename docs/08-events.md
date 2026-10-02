@@ -1,4 +1,4 @@
-# Project Tool — Event Contract（对齐 v0.6.7）
+# Project Tool — Event Contract（对齐 v0.6.9）
 
 Event 是 Project Tool 的不可变历史。本文件定义 event 契约；未来 Sync /
 Webhook / KC 集成都依赖它。

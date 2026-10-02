@@ -1,4 +1,4 @@
-# Project Tool — 接口规范（对齐 v0.6.7）
+# Project Tool — 接口规范（对齐 v0.6.9）
 
 本文件定义三类接口：
 

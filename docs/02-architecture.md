@@ -1,4 +1,4 @@
-# Project Tool — 架构设计（V0.1）
+# Project Tool — 架构设计（对齐 v0.6.9）
 
 ## 1. 总体风格
 
@@ -30,7 +30,7 @@ Ports & Adapters / Clean Architecture。依赖方向永远向内：
 多人协作 = 各自的 `.pjt` + Git pull / merge，冲突由 `rev` 链与 `doctor` 暴露。
 将来若要加本地 Web，也只是在本进程内多一个 HTTP 入口，仍然没有服务端存储。
 
-## 2. 模块结构（V0.1 实际代码）
+## 2. 模块结构（当前实际代码）
 
 ```text
 project_tool/

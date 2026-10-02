@@ -1,4 +1,4 @@
-# Project Tool — 存储与一致性设计（V0.1）
+# Project Tool — 存储与一致性设计（对齐 v0.6.9）
 
 ## 1. `.pjt` 目录规范
 
@@ -266,7 +266,7 @@ doctor 发现 error 时退出码 9。
 
 - 所有对象 `schema_version = "1.0"`。
 - 工具遇到 `2.x` 而只支持 `1.x`：**拒绝写入**，尽量只读，不得偷偷修改。
-- `pjt migrate` 逐级执行；执行前自动备份到 `.pjt/local/backups/`（V0.1 无实际迁移步骤）。
+- `pjt migrate` 逐级执行；执行前自动备份到 `.pjt/local/backups/`（当前 1.0 → 1.1 补齐 objects/areas 等空目录并抬版本）。
 
 ## 10. 本地状态与安全
 

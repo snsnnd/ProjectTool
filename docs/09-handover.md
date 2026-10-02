@@ -1,4 +1,4 @@
-# Project Tool — 交接文档（对齐 v0.6.7 / V1-C 收尾）
+# Project Tool — 交接文档（对齐 v0.6.9 / V1-C 收尾）
 
 > 给下一位接手的开发者 / agent。先读本文件，再按需读 `docs/02`–`docs/08`。
 > 仓库：`https://github.com/snsnnd/ProjectTool`（origin fetch 为 HTTPS，push 走 SSH）。
@@ -17,7 +17,7 @@ Git tracks code. Project Tool tracks the project.
 
 | 项 | 值 |
 |---|---|
-| 版本 | `0.6.7`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
+| 版本 | `0.6.9`，`SCHEMA_VERSION = "1.1"`（`project_tool/version.py` 是**唯一**版本来源，`pyproject.toml` 用 `dynamic = ["version"]`） |
 | 关键提交 | `6a19628` V0 → `0fcc628` V0.1 硬化 → `a7ac64e` EFW dogfooding → `779a886` expected_rev → `d73a492` Area → `52e1a9f` Artifact → `bdad62d` EFW 二次 dogfooding → V1-A.1 Hardening → V1-B Git 感知层 → `d1882aa` CLI 补完 → `c0066aa` 派生缓存治理 → `74249ad` Area owner + 接口契约 → `26b5718` Area 活跃度 → `5ebcaec` KC 打包面 → `3db3c70`/`eaf481f` task claim / `task next` → `41f6581`~`81cff1e` Windows 并发正确性 → `8f75e7a` 全项目复查修复 |
 | 质量门槛 | `ruff check .` 0 error · `mypy project_tool` 0 error · `pytest` 全绿 · CI（Ubuntu+Windows, Py3.12）✅ |
 | 真实验证 | V0.1：EFW Studio 一轮 dogfooding（`dogfooding/report.md`）；V1-A：`dogfooding/v1a-area-analysis.md` + `dogfooding/v1a-evidence/`；V1-C：`dogfooding/scripts/` 下 `multiwriter_probe` / `area_activity_demo` / `interface_check_probe` / `multiagent_demo` |

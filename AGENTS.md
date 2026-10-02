@@ -13,7 +13,7 @@ CLI / 未来 Web / SDK 都只经过同一个 Application Service。
 
 ## 1. 当前状态
 
-- 版本 `0.3.1`，`SCHEMA_VERSION = "1.1"`。**`version.py` 是唯一版本来源**
+- 版本 `0.6.9`，`SCHEMA_VERSION = "1.1"`。**`version.py` 是唯一版本来源**
   （`pyproject.toml` 用 `dynamic = ["version"]` 指向它）。
   改版本号后本仓库的可编辑安装元数据不会自动刷新，需要
   `uv pip install -e . --reinstall-package project-tool`（CI 的全新 `uv sync` 不受影响）。

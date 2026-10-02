@@ -150,3 +150,51 @@ def test_features_flags_in_docs05_match_the_code(facts):
         f"  文档: {documented}\n"
         f"  代码: {actual}"
     )
+
+
+# ================================================================== 版本号
+
+
+#: 声明「本文对齐某版本」的文档。锚点是括号里那个版本号。
+VERSIONED_DOCS = (
+    "README.md",  # ## 状态（V0.6.9）
+    "AGENTS.md",  # - 版本 `0.6.9`，
+    "docs/02-architecture.md",
+    "docs/04-storage.md",
+    "docs/05-interfaces.md",
+    "docs/08-events.md",
+    "docs/09-handover.md",
+)
+
+#: 每个文档里版本号出现的形式。顺序与 VERSIONED_DOCS 一致。
+VERSION_ANCHORS = (
+    r"## 状态（V(?P<v>\d+\.\d+\.\d+)）",
+    r"- 版本 `(?P<v>\d+\.\d+\.\d+)`",
+    r"架构设计（对齐 v(?P<v>\d+\.\d+\.\d+)）",
+    r"存储与一致性设计（对齐 v(?P<v>\d+\.\d+\.\d+)）",
+    r"接口规范（对齐 v(?P<v>\d+\.\d+\.\d+)）",
+    r"Event Contract（对齐 v(?P<v>\d+\.\d+\.\d+)）",
+    r"交接文档（对齐 v(?P<v>\d+\.\d+\.\d+)",
+)
+
+
+@pytest.mark.parametrize("doc,pattern", list(zip(VERSIONED_DOCS, VERSION_ANCHORS, strict=True)))
+def test_documented_version_matches_version_py(doc: str, pattern: str):
+    """文档里声明的版本必须等于 `project_tool/version.py`。
+
+    加这条的直接原因：AGENTS.md 写着「`version.py` 是唯一版本来源」，
+    **它自己却停在 `0.3.1`**，而真实版本已经走到 0.6.9。前一轮复查把它的
+    method 数、测试数都改了，单单漏掉版本号——而版本号恰恰是所有数字里
+    最显眼的一个。
+    """
+    import project_tool.version as version_module
+
+    text = read(doc)
+    matches = re.search(pattern, text)
+    assert matches, (
+        f"{doc} 里找不到版本声明（锚点变了）。期望匹配：{pattern}\n"
+        f"真实版本是 {version_module.__version__}"
+    )
+    assert matches.group("v") == version_module.__version__, (
+        f"{doc} 说 {matches.group('v')}，version.py 是 {version_module.__version__}"
+    )
